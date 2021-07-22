@@ -292,6 +292,11 @@ def squad_convert_example_to_features(
                 start_position = tok_start_position - doc_start + doc_offset
                 end_position = tok_end_position - doc_start + doc_offset
 
+        # chandler
+        # answer_mask: mask for answer position
+        answer_mask = np.zeros_like(span["token_type_ids"])
+        answer_mask[start_position:end_position+1] = 1
+
         features.append(
             SquadFeatures(
                 span["input_ids"],
@@ -308,6 +313,7 @@ def squad_convert_example_to_features(
                 start_position=start_position,
                 end_position=end_position,
                 is_impossible=span_is_impossible,
+                answer_mask=answer_mask,
                 qas_id=example.qas_id,
             )
         )
@@ -414,6 +420,7 @@ def squad_convert_examples_to_features(
         all_cls_index = torch.tensor([f.cls_index for f in features], dtype=torch.long)
         all_p_mask = torch.tensor([f.p_mask for f in features], dtype=torch.float)
         all_is_impossible = torch.tensor([f.is_impossible for f in features], dtype=torch.float)
+        all_answer_mask = torch.tensor([f.answer_mask for f in features], dtype=torch.float)
 
         if not is_training:
             all_feature_index = torch.arange(all_input_ids.size(0), dtype=torch.long)
@@ -432,6 +439,7 @@ def squad_convert_examples_to_features(
                 all_cls_index,
                 all_p_mask,
                 all_is_impossible,
+                all_answer_mask,
             )
 
         return features, dataset
@@ -802,6 +810,7 @@ class SquadFeatures:
         start_position,
         end_position,
         is_impossible,
+        answer_mask,
         qas_id: str = None,
         encoding: BatchEncoding = None,
     ):
@@ -824,6 +833,9 @@ class SquadFeatures:
         self.qas_id = qas_id
 
         self.encoding = encoding
+
+        # chandler
+        self.answer_mask = answer_mask
 
 
 class SquadResult:
