@@ -38,7 +38,6 @@ from transformers import (
     AutoModelForQuestionAnswering,
     AutoTokenizer,
     get_linear_schedule_with_warmup,
-    squad_convert_examples_to_features,
 )
 from transformers.data.metrics.squad_metrics import (
     compute_predictions_log_probs,
@@ -54,6 +53,7 @@ try:
 except ImportError:
     from tensorboardX import SummaryWriter
 
+from squad.squad import squad_convert_examples_to_features
 
 logger = logging.getLogger(__name__)
 
