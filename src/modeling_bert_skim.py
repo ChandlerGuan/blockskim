@@ -28,15 +28,15 @@ from packaging import version
 from torch import nn
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 
-from ...activations import ACT2FN
-from ...file_utils import (
+from transformers.activations import ACT2FN
+from transformers.file_utils import (
     ModelOutput,
     add_code_sample_docstrings,
     add_start_docstrings,
     add_start_docstrings_to_model_forward,
     replace_return_docstrings,
 )
-from ...modeling_outputs import (
+from transformers.modeling_outputs import (
     BaseModelOutputWithPastAndCrossAttentions,
     BaseModelOutputWithPoolingAndCrossAttentions,
     CausalLMOutputWithCrossAttentions,
@@ -47,15 +47,16 @@ from ...modeling_outputs import (
     SequenceClassifierOutput,
     TokenClassifierOutput,
 )
-from ...modeling_utils import (
+from transformers.modeling_utils import (
     PreTrainedModel,
     apply_chunking_to_forward,
     find_pruneable_heads_and_indices,
     prune_linear_layer,
 )
-from ...utils import logging
-from .configuration_bert import BertConfig
+from transformers.utils import logging
+from transformers.models.bert.configuration_bert import BertConfig
 
+from modeling_blockskim import BlockSkim
 
 logger = logging.get_logger(__name__)
 
@@ -249,6 +250,8 @@ class BertSelfAttention(nn.Module):
 
         self.is_decoder = config.is_decoder
 
+        self.skim_predictor = BlockSkim(config)
+
     def transpose_for_scores(self, x):
         new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
         x = x.view(*new_x_shape)
@@ -332,6 +335,11 @@ class BertSelfAttention(nn.Module):
         # seem a bit unusual, but is taken from the original Transformer paper.
         attention_probs = self.dropout(attention_probs)
 
+        # chandler
+        # skim_mask predicted by block skim module
+        # skim_mask: [batch_size, max_seq_length/block_size]
+        skim_mask = self.skim_predictor(attention_probs)
+
         # Mask heads if we want to
         if head_mask is not None:
             attention_probs = attention_probs * head_mask
@@ -344,8 +352,11 @@ class BertSelfAttention(nn.Module):
 
         outputs = (context_layer, attention_probs) if output_attentions else (context_layer,)
 
+        outputs = outputs + (skim_mask,)
+
         if self.is_decoder:
             outputs = outputs + (past_key_value,)
+
         return outputs
 
 
@@ -546,6 +557,7 @@ class BertEncoder(nn.Module):
         all_hidden_states = () if output_hidden_states else None
         all_self_attentions = () if output_attentions else None
         all_cross_attentions = () if output_attentions and self.config.add_cross_attention else None
+        all_skim_mask = ()
 
         next_decoder_cache = () if use_cache else None
         for i, layer_module in enumerate(self.layer):
@@ -596,6 +608,7 @@ class BertEncoder(nn.Module):
                 all_self_attentions = all_self_attentions + (layer_outputs[1],)
                 if self.config.add_cross_attention:
                     all_cross_attentions = all_cross_attentions + (layer_outputs[2],)
+            all_skim_mask = all_skim_mask + (layer_outputs[-1],)
 
         if output_hidden_states:
             all_hidden_states = all_hidden_states + (hidden_states,)
@@ -609,6 +622,7 @@ class BertEncoder(nn.Module):
                     all_hidden_states,
                     all_self_attentions,
                     all_cross_attentions,
+                    all_skim_mask,
                 ]
                 if v is not None
             )
@@ -618,6 +632,7 @@ class BertEncoder(nn.Module):
             hidden_states=all_hidden_states,
             attentions=all_self_attentions,
             cross_attentions=all_cross_attentions,
+
         )
 
 
@@ -1852,3 +1867,37 @@ class BertForQuestionAnswering(BertPreTrainedModel):
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
+
+def test_BertSelfAttention():
+
+    config = BertConfig.from_pretrained('bert-base-uncased')
+    config.max_seq_length = 512
+
+    self_attention = BertSelfAttention(config)
+
+    hidden_states = torch.rand((2, config.max_seq_length, config.hidden_size))
+
+    y = self_attention(hidden_states)
+
+    print(y[0].shape)
+
+def test_BertForQuestionAnswering():
+    config = BertConfig.from_pretrained('bert-base-uncased')
+    config.max_seq_length = 512
+
+    print()
+
+    bert = BertForQuestionAnswering(config)
+
+    hidden_states = torch.randint(0,15,(2, config.max_seq_length))
+
+    y = bert(hidden_states,return_dict=False)
+
+    print(y[0].shape)
+
+    import IPython
+    IPython.embed()
+
+if __name__ == "__main__":
+    # test_BertSelfAttention()
+    test_BertForQuestionAnswering()
