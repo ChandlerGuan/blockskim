@@ -164,6 +164,33 @@ def load_tf_weights_in_bert(model, config, tf_checkpoint_path):
         pointer.data = torch.from_numpy(array)
     return model
 
+@dataclass
+class BaseModelOutputWithPastAndCrossAttentionsWithSkim(BaseModelOutputWithPastAndCrossAttentions):
+    last_hidden_state: torch.FloatTensor = None
+    past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
+    hidden_states: Optional[Tuple[torch.FloatTensor]] = None
+    attentions: Optional[Tuple[torch.FloatTensor]] = None
+    cross_attentions: Optional[Tuple[torch.FloatTensor]] = None
+    all_skim_mask: Optional[Tuple[torch.FloatTensor]] = None
+
+@dataclass
+class BaseModelOutputWithPoolingAndCrossAttentionsWithSkim(BaseModelOutputWithPoolingAndCrossAttentions):
+    last_hidden_state: torch.FloatTensor = None
+    pooler_output: torch.FloatTensor = None
+    hidden_states: Optional[Tuple[torch.FloatTensor]] = None
+    past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
+    attentions: Optional[Tuple[torch.FloatTensor]] = None
+    cross_attentions: Optional[Tuple[torch.FloatTensor]] = None
+    all_skim_mask: Optional[Tuple[torch.FloatTensor]] = None
+
+@dataclass
+class QuestionAnsweringModelOutputWithSkim(QuestionAnsweringModelOutput):
+    loss: Optional[torch.FloatTensor] = None
+    start_logits: torch.FloatTensor = None
+    end_logits: torch.FloatTensor = None
+    hidden_states: Optional[Tuple[torch.FloatTensor]] = None
+    attentions: Optional[Tuple[torch.FloatTensor]] = None
+    all_skim_mask: Optional[Tuple[torch.FloatTensor]] = None
 
 class BertEmbeddings(nn.Module):
     """Construct the embeddings from word, position and token_type embeddings."""
@@ -626,13 +653,13 @@ class BertEncoder(nn.Module):
                 ]
                 if v is not None
             )
-        return BaseModelOutputWithPastAndCrossAttentions(
+        return BaseModelOutputWithPastAndCrossAttentionsWithSkim(
             last_hidden_state=hidden_states,
             past_key_values=next_decoder_cache,
             hidden_states=all_hidden_states,
             attentions=all_self_attentions,
             cross_attentions=all_cross_attentions,
-
+            all_skim_mask=all_skim_mask,
         )
 
 
@@ -1021,13 +1048,14 @@ class BertModel(BertPreTrainedModel):
         if not return_dict:
             return (sequence_output, pooled_output) + encoder_outputs[1:]
 
-        return BaseModelOutputWithPoolingAndCrossAttentions(
+        return BaseModelOutputWithPoolingAndCrossAttentionsWithSkim(
             last_hidden_state=sequence_output,
             pooler_output=pooled_output,
             past_key_values=encoder_outputs.past_key_values,
             hidden_states=encoder_outputs.hidden_states,
             attentions=encoder_outputs.attentions,
             cross_attentions=encoder_outputs.cross_attentions,
+            all_skim_mask=encoder_outputs.all_skim_mask,
         )
 
 
@@ -1860,12 +1888,13 @@ class BertForQuestionAnswering(BertPreTrainedModel):
             output = (start_logits, end_logits) + outputs[2:]
             return ((total_loss,) + output) if total_loss is not None else output
 
-        return QuestionAnsweringModelOutput(
+        return QuestionAnsweringModelOutputWithSkim(
             loss=total_loss,
             start_logits=start_logits,
             end_logits=end_logits,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
+            all_skim_mask=outputs.all_skim_mask,
         )
 
 def test_BertSelfAttention():

@@ -58,6 +58,7 @@ from squad.squad import squad_convert_examples_to_features
 logger = logging.getLogger(__name__)
 
 from modeling_bert_skim import BertForQuestionAnswering as BertForQuestionAnsweringWithSkim
+from modeling_blockskim import compute_skim_mask
 
 MODEL_CONFIG_CLASSES = list(MODEL_FOR_QUESTION_ANSWERING_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
@@ -205,7 +206,7 @@ def train(args, train_dataset, model, tokenizer):
                         {"langs": (torch.ones(batch[0].shape, dtype=torch.int64) * args.lang_id).to(args.device)}
                     )
 
-            outputs = model(**inputs,return_dict=False)
+            outputs = model(**inputs)
             # model outputs are always tuple in transformers (see doc)
 
             if args.block_skim:
@@ -320,6 +321,8 @@ def evaluate(args, model, tokenizer, prefix=""):
     logger.info("  Batch size = %d", args.eval_batch_size)
 
     all_results = []
+    all_layer_skim_mask = [[] for _ in range(model.config.num_hidden_layers)]
+    all_skim_label = []
     start_time = timeit.default_timer()
 
     for batch in tqdm(eval_dataloader, desc="Evaluating"):
@@ -352,7 +355,14 @@ def evaluate(args, model, tokenizer, prefix=""):
             eval_feature = features[feature_index.item()]
             unique_id = int(eval_feature.unique_id)
 
-            output = [to_list(output[i]) for output in outputs.to_tuple()]
+            output = [to_list(output[i]) for output in outputs.to_tuple() if isinstance(output, torch.Tensor)]
+
+            skim_label = compute_skim_mask(batch[-1][i], model.config.max_seq_length//model.config.block_size, model.config.block_size)
+            for layer_idx, skim_mask in enumerate(all_layer_skim_mask):
+                skim_mask.extend(to_list(torch.argmax(outputs.all_skim_mask[layer_idx][i],axis=-1)))
+            all_skim_label.extend(to_list(skim_label))
+            
+            assert len(all_skim_label) == len(all_layer_skim_mask[0])
 
             # Some models (XLNet, XLM) use 5 arguments for their predictions, while the other "simpler"
             # models only use two.
@@ -380,6 +390,12 @@ def evaluate(args, model, tokenizer, prefix=""):
 
     evalTime = timeit.default_timer() - start_time
     logger.info("  Evaluation done in total %f secs (%f sec per example)", evalTime, evalTime / len(dataset))
+
+    if args.block_skim:
+        from sklearn.metrics import classification_report
+        for layer_idx in range(len(all_layer_skim_mask)):
+            print(f'evaluating skim predictor of layer {layer_idx}')
+            print(classification_report(all_skim_label, all_layer_skim_mask[layer_idx]))
 
     # Compute predictions
     output_prediction_file = os.path.join(args.output_dir, "predictions_{}.json".format(prefix))
@@ -474,7 +490,7 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
         else:
             processor = SquadV2Processor() if args.version_2_with_negative else SquadV1Processor()
             if evaluate:
-                examples = processor.get_dev_examples(args.data_dir, filename=args.predict_file)
+                examples = processor.get_train_examples(args.data_dir, filename=args.predict_file)
             else:
                 examples = processor.get_train_examples(args.data_dir, filename=args.train_file)
 
@@ -860,7 +876,7 @@ def main():
         for checkpoint in checkpoints:
             # Reload the model
             global_step = checkpoint.split("-")[-1] if len(checkpoints) > 1 else ""
-            model = AutoModelForQuestionAnswering.from_pretrained(checkpoint)  # , force_download=True)
+            # model = AutoModelForQuestionAnswering.from_pretrained(checkpoint)  # , force_download=True)
             model.to(args.device)
 
             # Evaluate

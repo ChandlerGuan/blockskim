@@ -57,12 +57,14 @@ class BlockSkim(nn.Module):
         return out
 
 """
-mask: [batch, num_block, 2], predicted skim mask
-label: [batch, num_block], skim label
-cross entropy: ignore index
+mask: [batch, sequence length], answer mask
 """
-def compute_skim_loss(mask, label):
-    pass
+def compute_skim_mask(mask, num_block, block_size):
+    blocked_answer_mask = mask.view((-1, num_block, block_size))
+    if blocked_answer_mask.shape[0]==1:
+        blocked_answer_mask = blocked_answer_mask.squeeze(axis=0)
+    skim_label = (torch.sum(blocked_answer_mask, dim=-1)>1).to(dtype=torch.long)
+    return skim_label
 
 def test_BlockSkim():
     class DummyConfig():

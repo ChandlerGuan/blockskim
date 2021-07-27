@@ -382,7 +382,7 @@ def squad_convert_examples_to_features(
             doc_stride=doc_stride,
             max_query_length=max_query_length,
             padding_strategy=padding_strategy,
-            is_training=is_training,
+            is_training=True,
         )
         features = list(
             tqdm(
@@ -425,7 +425,7 @@ def squad_convert_examples_to_features(
         if not is_training:
             all_feature_index = torch.arange(all_input_ids.size(0), dtype=torch.long)
             dataset = TensorDataset(
-                all_input_ids, all_attention_masks, all_token_type_ids, all_feature_index, all_cls_index, all_p_mask
+                all_input_ids, all_attention_masks, all_token_type_ids, all_feature_index, all_cls_index, all_p_mask, all_answer_mask,
             )
         else:
             all_start_positions = torch.tensor([f.start_position for f in features], dtype=torch.long)
