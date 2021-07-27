@@ -57,6 +57,8 @@ from squad.squad import squad_convert_examples_to_features
 
 logger = logging.getLogger(__name__)
 
+from modeling_bert_skim import BertForQuestionAnswering as BertForQuestionAnsweringWithSkim
+
 MODEL_CONFIG_CLASSES = list(MODEL_FOR_QUESTION_ANSWERING_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
 
@@ -162,6 +164,8 @@ def train(args, train_dataset, model, tokenizer):
             logger.info("  Starting fine-tuning.")
 
     tr_loss, logging_loss = 0.0, 0.0
+    if args.block_skim:
+        tr_qa_loss, logging_qa_loss, tr_skim_loss, logging_skim_loss = 0.0, 0.0, 0.0, 0.0
     model.zero_grad()
     train_iterator = trange(
         epochs_trained, int(args.num_train_epochs), desc="Epoch", disable=args.local_rank not in [-1, 0]
@@ -201,14 +205,33 @@ def train(args, train_dataset, model, tokenizer):
                         {"langs": (torch.ones(batch[0].shape, dtype=torch.int64) * args.lang_id).to(args.device)}
                     )
 
-            outputs = model(**inputs)
+            outputs = model(**inputs,return_dict=False)
             # model outputs are always tuple in transformers (see doc)
-            loss = outputs[0]
+
+            if args.block_skim:
+                answer_mask = batch[-1]
+                all_skim_mask = outputs[-1]
+                blocked_answer_mask = answer_mask.view((-1, model.config.max_seq_length//model.config.block_size, model.config.block_size))
+                skim_label = (torch.sum(blocked_answer_mask, dim=-1)>1).to(dtype=torch.long)
+                all_skim_loss = [torch.nn.functional.cross_entropy(skim_mask.view(-1,2), skim_label.view(-1)) for skim_mask in all_skim_mask]
+                skim_loss = sum(all_skim_loss)
+
+                qa_loss = outputs[0]
+                loss = skim_loss + qa_loss
+            else:
+                loss = outputs[0]
 
             if args.n_gpu > 1:
                 loss = loss.mean()  # mean() to average on multi-gpu parallel (not distributed) training
+                if args.block_skim:
+                    qa_loss = qa_loss.mean()
+                    skim_loss = skim_loss.mean()
             if args.gradient_accumulation_steps > 1:
                 loss = loss / args.gradient_accumulation_steps
+                if args.block_skim:
+                    qa_loss = qa_loss / args.gradient_accumulation_steps
+                    skim_loss = skim_loss / args.gradient_accumulation_steps
+
 
             if args.fp16:
                 with amp.scale_loss(loss, optimizer) as scaled_loss:
@@ -217,6 +240,9 @@ def train(args, train_dataset, model, tokenizer):
                 loss.backward()
 
             tr_loss += loss.item()
+            if args.block_skim:
+                tr_qa_loss += qa_loss.item()
+                tr_skim_loss += skim_loss.item()
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 if args.fp16:
                     torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
@@ -238,6 +264,11 @@ def train(args, train_dataset, model, tokenizer):
                     tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
                     tb_writer.add_scalar("loss", (tr_loss - logging_loss) / args.logging_steps, global_step)
                     logging_loss = tr_loss
+                    if args.block_skim:
+                        tb_writer.add_scalar("skim_loss", (tr_skim_loss - logging_skim_loss) / args.logging_steps, global_step)
+                        tb_writer.add_scalar("qa_loss", (tr_qa_loss - logging_qa_loss) / args.logging_steps, global_step)
+                        logging_qa_loss = tr_qa_loss
+                        logging_skim_loss = tr_skim_loss
 
                 # Save model checkpoint
                 if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
@@ -659,6 +690,10 @@ def main():
     parser.add_argument("--server_port", type=str, default="", help="Can be used for distant debugging.")
 
     parser.add_argument("--threads", type=int, default=1, help="multiple threads for converting example to features")
+
+    parser.add_argument("--block_skim", action="store_true", help="add block skim module")
+    parser.add_argument("--block_size", type=int, default=32, help="block size for block skim module")
+
     args = parser.parse_args()
 
     if args.doc_stride >= args.max_seq_length - args.max_query_length:
@@ -738,12 +773,25 @@ def main():
         cache_dir=args.cache_dir if args.cache_dir else None,
         use_fast=False,  # SquadDataset is not compatible with Fast tokenizers which have a smarter overflow handeling
     )
-    model = AutoModelForQuestionAnswering.from_pretrained(
-        args.model_name_or_path,
-        from_tf=bool(".ckpt" in args.model_name_or_path),
-        config=config,
-        cache_dir=args.cache_dir if args.cache_dir else None,
-    )
+    if args.block_skim:
+        if args.model_type =='bert':
+            config.max_seq_length = args.max_seq_length
+            config.block_size = args.block_size
+            model = BertForQuestionAnsweringWithSkim.from_pretrained(
+            args.model_name_or_path,
+            from_tf=bool(".ckpt" in args.model_name_or_path),
+            config=config,
+            cache_dir=args.cache_dir if args.cache_dir else None,
+        )
+        else:
+            raise ValueError(f"{args.model_type} with skim not implemented")
+    else:
+        model = AutoModelForQuestionAnswering.from_pretrained(
+            args.model_name_or_path,
+            from_tf=bool(".ckpt" in args.model_name_or_path),
+            config=config,
+            cache_dir=args.cache_dir if args.cache_dir else None,
+        )
 
     if args.local_rank == 0:
         # Make sure only the first process in distributed training will download model & vocab

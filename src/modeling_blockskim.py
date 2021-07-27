@@ -10,8 +10,7 @@ class BlockSkim(nn.Module):
         self.seq_len = config.max_seq_length
         self.pool_kernel_size = 2
 
-        # self.block_size = config.block_size
-        self.block_size = 32
+        self.block_size = config.block_size
         self.block_num = self.seq_len//self.block_size
         self.num_attention_heads = config.num_attention_heads
 
@@ -36,7 +35,7 @@ class BlockSkim(nn.Module):
                                         stride=1
                                         )
         self.relu3 = nn.ReLU(inplace=True)
-        self.fc = torch.nn.Linear(self.num_attention_heads*self.block_size*self.block_size//16,1)
+        self.fc = torch.nn.Linear(self.num_attention_heads*self.block_size*self.block_size//16,2)
 
     def forward(self, x):
         out = x.view(-1, self.num_attention_heads,  self.block_num, self.block_size, self.block_num, self.block_size).diagonal(dim1=2, dim2=4)
@@ -53,13 +52,23 @@ class BlockSkim(nn.Module):
         out = self.pool2(out)
         # out = self.conv3(out).squeeze(dim=1)
         out = torch.flatten(out,start_dim=1)
-        out = self.fc(out).view(-1, self.block_num, 1).squeeze(dim=-1)
+        # out = self.fc(out).view(-1, self.block_num, 1).squeeze(dim=-1)
+        out = self.fc(out).view(-1, self.block_num, 2)
         return out
+
+"""
+mask: [batch, num_block, 2], predicted skim mask
+label: [batch, num_block], skim label
+cross entropy: ignore index
+"""
+def compute_skim_loss(mask, label):
+    pass
 
 def test_BlockSkim():
     class DummyConfig():
         max_seq_length = 512
         num_attention_heads = 12
+        block_size = 32
 
     config = DummyConfig()
 
