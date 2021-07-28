@@ -322,8 +322,9 @@ def evaluate(args, model, tokenizer, prefix=""):
     logger.info("  Batch size = %d", args.eval_batch_size)
 
     all_results = []
-    all_layer_skim_mask = [[] for _ in range(model.config.num_hidden_layers)]
-    all_skim_label = []
+    if args.block_skim:
+        all_layer_skim_mask = [[] for _ in range(model.config.num_hidden_layers)]
+        all_skim_label = []
     start_time = timeit.default_timer()
 
     for batch in tqdm(eval_dataloader, desc="Evaluating"):
@@ -358,12 +359,13 @@ def evaluate(args, model, tokenizer, prefix=""):
 
             output = [to_list(output[i]) for output in outputs.to_tuple() if isinstance(output, torch.Tensor)]
 
-            skim_label = compute_skim_mask(batch[-1][i], model.config.max_seq_length//model.config.block_size, model.config.block_size)
-            for layer_idx, skim_mask in enumerate(all_layer_skim_mask):
-                skim_mask.extend(to_list(torch.argmax(outputs.all_skim_mask[layer_idx][i],axis=-1)))
-            all_skim_label.extend(to_list(skim_label))
-            
-            assert len(all_skim_label) == len(all_layer_skim_mask[0])
+            if args.block_skim:
+                skim_label = compute_skim_mask(batch[-1][i], model.config.max_seq_length//model.config.block_size, model.config.block_size)
+                for layer_idx, skim_mask in enumerate(all_layer_skim_mask):
+                    skim_mask.extend(to_list(torch.argmax(outputs.all_skim_mask[layer_idx][i],axis=-1)))
+                all_skim_label.extend(to_list(skim_label))
+                
+                assert len(all_skim_label) == len(all_layer_skim_mask[0])
 
             # Some models (XLNet, XLM) use 5 arguments for their predictions, while the other "simpler"
             # models only use two.
