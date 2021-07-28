@@ -167,6 +167,7 @@ def train(args, train_dataset, model, tokenizer):
     tr_loss, logging_loss = 0.0, 0.0
     if args.block_skim:
         tr_qa_loss, logging_qa_loss, tr_skim_loss, logging_skim_loss = 0.0, 0.0, 0.0, 0.0
+        balance_weight = torch.tensor([1, args.balance_factor]).to(args.device)
     model.zero_grad()
     train_iterator = trange(
         epochs_trained, int(args.num_train_epochs), desc="Epoch", disable=args.local_rank not in [-1, 0]
@@ -214,11 +215,11 @@ def train(args, train_dataset, model, tokenizer):
                 all_skim_mask = outputs[-1]
                 blocked_answer_mask = answer_mask.view((-1, model.config.max_seq_length//model.config.block_size, model.config.block_size))
                 skim_label = (torch.sum(blocked_answer_mask, dim=-1)>1).to(dtype=torch.long)
-                all_skim_loss = [torch.nn.functional.cross_entropy(skim_mask.view(-1,2), skim_label.view(-1)) for skim_mask in all_skim_mask]
+                all_skim_loss = [torch.nn.functional.cross_entropy(skim_mask.view(-1,2), skim_label.view(-1), weight=balance_weight) for skim_mask in all_skim_mask]
                 skim_loss = sum(all_skim_loss)
 
                 qa_loss = outputs[0]
-                loss = skim_loss + qa_loss
+                loss = args.skim_factor * skim_loss + qa_loss
             else:
                 loss = outputs[0]
 
@@ -709,6 +710,8 @@ def main():
 
     parser.add_argument("--block_skim", action="store_true", help="add block skim module")
     parser.add_argument("--block_size", type=int, default=32, help="block size for block skim module")
+    parser.add_argument("--skim_factor", default=0.0001, type=float, help="factor for skim predictor")
+    parser.add_argument("--balance_factor", default=1, type=float, help="factor for skim predictor")
 
     args = parser.parse_args()
 

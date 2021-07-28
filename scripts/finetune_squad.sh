@@ -1,5 +1,10 @@
-OUTPUT_DIR=model/block_skim/baseline
 DATA_DIR=datasets/squad
+
+
+BALANCE_FACTOR=20
+SKIM_FACTOR=0
+
+OUTPUT_DIR=model/block_skim/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
 
 if [ -d "$OUTPUT_DIR" ]; then
   OUTPUT_DIR=${OUTPUT_DIR}_$(date +"%m-%d-%H-%M")
@@ -34,6 +39,8 @@ mkdir -p ${OUTPUT_DIR}
 python src/run_squad.py \
   --model_type bert \
   --block_skim \
+  --skim_factor ${SKIM_FACTOR} \
+  --balance_factor ${BALANCE_FACTOR} \
   --model_name_or_path bert-base-uncased \
   --do_lower_case \
   --do_train \
@@ -47,5 +54,6 @@ python src/run_squad.py \
   --num_train_epochs 2.0 \
   --max_seq_length 512 \
   --doc_stride 128 \
+  --save_steps 10000 \
   --overwrite_output_dir \
   --output_dir ${OUTPUT_DIR} 2>&1 | tee ${OUTPUT_DIR}/log_finetune.log
