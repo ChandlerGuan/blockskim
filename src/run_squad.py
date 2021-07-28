@@ -794,11 +794,11 @@ def main():
             config.max_seq_length = args.max_seq_length
             config.block_size = args.block_size
             model = BertForQuestionAnsweringWithSkim.from_pretrained(
-            args.model_name_or_path,
-            from_tf=bool(".ckpt" in args.model_name_or_path),
-            config=config,
-            cache_dir=args.cache_dir if args.cache_dir else None,
-        )
+                args.model_name_or_path,
+                from_tf=bool(".ckpt" in args.model_name_or_path),
+                config=config,
+                cache_dir=args.cache_dir if args.cache_dir else None,
+            )
         else:
             raise ValueError(f"{args.model_type} with skim not implemented")
     else:
@@ -848,7 +848,10 @@ def main():
         torch.save(args, os.path.join(args.output_dir, "training_args.bin"))
 
         # Load a trained model and vocabulary that you have fine-tuned
-        model = AutoModelForQuestionAnswering.from_pretrained(args.output_dir)  # , force_download=True)
+        if args.block_skim:
+            model = BertForQuestionAnsweringWithSkim.from_pretrained(args.output_dir,config=config)
+        else:
+            model = AutoModelForQuestionAnswering.from_pretrained(args.output_dir)  # , force_download=True)
 
         # SquadDataset is not compatible with Fast tokenizers which have a smarter overflow handeling
         # So we use use_fast=False here for now until Fast-tokenizer-compatible-examples are out
@@ -876,7 +879,10 @@ def main():
         for checkpoint in checkpoints:
             # Reload the model
             global_step = checkpoint.split("-")[-1] if len(checkpoints) > 1 else ""
-            # model = AutoModelForQuestionAnswering.from_pretrained(checkpoint)  # , force_download=True)
+            if args.block_skim:
+                model = BertForQuestionAnsweringWithSkim.from_pretrained(checkpoint,config=config)
+            else:
+                model = AutoModelForQuestionAnswering.from_pretrained(checkpoint)  # , force_download=True)
             model.to(args.device)
 
             # Evaluate
