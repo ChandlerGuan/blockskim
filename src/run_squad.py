@@ -360,13 +360,13 @@ def evaluate(args, model, tokenizer, prefix=""):
 
             output = [to_list(output[i]) for output in outputs.to_tuple() if isinstance(output, torch.Tensor)]
 
-            # if args.block_skim:
-            #     skim_label = compute_skim_mask(batch[-1][i], model.config.max_seq_length//model.config.block_size, model.config.block_size)
-            #     for layer_idx, skim_mask in enumerate(all_layer_skim_mask):
-            #         skim_mask.extend(to_list(torch.argmax(outputs.all_skim_mask[layer_idx][i],axis=-1)))
-            #     all_skim_label.extend(to_list(skim_label))
+            if args.block_skim:
+                skim_label = compute_skim_mask(batch[-1][i], model.config.max_seq_length//model.config.block_size, model.config.block_size)
+                for layer_idx, skim_mask in enumerate(all_layer_skim_mask):
+                    skim_mask.extend(to_list(torch.argmax(outputs.all_skim_mask[layer_idx][i],axis=-1)))
+                all_skim_label.extend(to_list(skim_label))
                 
-            #     assert len(all_skim_label) == len(all_layer_skim_mask[0])
+                assert len(all_skim_label) == len(all_layer_skim_mask[0])
 
             # Some models (XLNet, XLM) use 5 arguments for their predictions, while the other "simpler"
             # models only use two.
@@ -395,11 +395,11 @@ def evaluate(args, model, tokenizer, prefix=""):
     evalTime = timeit.default_timer() - start_time
     logger.info("  Evaluation done in total %f secs (%f sec per example)", evalTime, evalTime / len(dataset))
 
-    # if args.block_skim:
-    #     from sklearn.metrics import classification_report
-    #     for layer_idx in range(len(all_layer_skim_mask)):
-    #         print(f'evaluating skim predictor of layer {layer_idx}')
-    #         print(classification_report(all_skim_label, all_layer_skim_mask[layer_idx]))
+    if args.block_skim:
+        from sklearn.metrics import classification_report
+        for layer_idx in range(len(all_layer_skim_mask)):
+            print(f'evaluating skim predictor of layer {layer_idx}')
+            print(classification_report(all_skim_label, all_layer_skim_mask[layer_idx]))
 
     # Compute predictions
     output_prediction_file = os.path.join(args.output_dir, "predictions_{}.json".format(prefix))
