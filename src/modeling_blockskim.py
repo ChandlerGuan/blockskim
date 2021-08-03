@@ -7,11 +7,9 @@ class BlockSkim(nn.Module):
 
         self.kernel_size = 3
         self.stride = 1
-        self.seq_len = config.max_seq_length
         self.pool_kernel_size = 2
 
         self.block_size = config.block_size
-        self.block_num = self.seq_len//self.block_size
         self.num_attention_heads = config.num_attention_heads
 
         self.conv1 = torch.nn.Conv2d(config.num_attention_heads,config.num_attention_heads,
@@ -38,7 +36,15 @@ class BlockSkim(nn.Module):
         self.fc = torch.nn.Linear(self.num_attention_heads*self.block_size*self.block_size//16,2)
 
     def forward(self, x):
-        out = x.view(-1, self.num_attention_heads,  self.block_num, self.block_size, self.block_num, self.block_size).diagonal(dim1=2, dim2=4)
+        """
+        x: [batch, num_heads, from_seq_len, to_seq_len]
+        """
+        
+        seq_len = x.shape[2]
+        assert x.shape[2]%self.block_size == 0
+        block_num = seq_len//self.block_size
+
+        out = x.view(-1, self.num_attention_heads,  block_num, self.block_size, block_num, self.block_size).diagonal(dim1=2, dim2=4)
         out = out.permute(0,4,1,2,3).reshape(-1, self.num_attention_heads, self.block_size, self.block_size)
         # out -> shape [batch, diag block, head, from, to]
 
@@ -53,7 +59,7 @@ class BlockSkim(nn.Module):
         # out = self.conv3(out).squeeze(dim=1)
         out = torch.flatten(out,start_dim=1)
         # out = self.fc(out).view(-1, self.block_num, 1).squeeze(dim=-1)
-        out = self.fc(out).view(-1, self.block_num, 2)
+        out = self.fc(out).view(-1, block_num, 2)
         return out
 
 """
