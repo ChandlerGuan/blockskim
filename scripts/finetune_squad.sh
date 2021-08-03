@@ -56,7 +56,7 @@ python src/run_squad.py \
   --per_gpu_train_batch_size 12 \
   --per_gpu_eval_batch_size=16 \
   --learning_rate 3e-5 \
-  --num_train_epochs 2.0 \
+  --num_train_epochs 1.0 \
   --max_seq_length 512 \
   --doc_stride 128 \
   --save_steps 10000 \

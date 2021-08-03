@@ -25,6 +25,7 @@ import timeit
 
 import numpy as np
 import torch
+from torch.nn.parallel.data_parallel import DataParallel
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
@@ -324,7 +325,8 @@ def evaluate(args, model, tokenizer, prefix=""):
 
     all_results = []
     if args.block_skim:
-        all_layer_skim_mask = [[] for _ in range(model.config.num_hidden_layers)]
+        num_hidden_layers = model.config.num_hidden_layers if isinstance(model, DataParallel) else model.module.config.num_hidden_layers
+        all_layer_skim_mask = [[] for _ in range(num_hidden_layers)]
         all_skim_label = []
     start_time = timeit.default_timer()
 
