@@ -2,7 +2,12 @@ DATA_DIR=datasets/squad
 
 
 BALANCE_FACTOR=20
-SKIM_FACTOR=0
+SKIM_FACTOR=1
+
+for BALANCE_FACTOR in 10 20  100
+do
+for SKIM_FACTOR in 1 0.1 0.01 0.001
+do
 
 OUTPUT_DIR=model/block_skim/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
 
@@ -57,3 +62,6 @@ python src/run_squad.py \
   --save_steps 10000 \
   --overwrite_output_dir \
   --output_dir ${OUTPUT_DIR} 2>&1 | tee ${OUTPUT_DIR}/log_finetune.log
+
+done
+done
