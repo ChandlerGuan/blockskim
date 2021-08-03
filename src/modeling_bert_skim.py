@@ -632,7 +632,7 @@ class BertEncoder(nn.Module):
         self.config = config
         self.layer = nn.ModuleList([BertLayer(config) for _ in range(config.num_hidden_layers)])
 
-        self.actual_skim = config.actual_skim
+        self.actual_skim = config.actual_skim if hasattr(config, 'actual_skim') else False
 
     def forward(
         self,
