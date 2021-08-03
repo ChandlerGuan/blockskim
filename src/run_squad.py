@@ -325,7 +325,7 @@ def evaluate(args, model, tokenizer, prefix=""):
 
     all_results = []
     if args.block_skim:
-        num_hidden_layers = model.config.num_hidden_layers if isinstance(model, DataParallel) else model.module.config.num_hidden_layers
+        num_hidden_layers = model.module.config.num_hidden_layers if isinstance(model, DataParallel) else model.config.num_hidden_layers
         all_layer_skim_mask = [[] for _ in range(num_hidden_layers)]
         all_skim_label = []
     start_time = timeit.default_timer()
