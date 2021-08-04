@@ -209,12 +209,16 @@ def skim_attention_mask_tensor(attention_mask, skim_mask_prediction):
     attention_mask = attention_mask.gather(dim=3, index=skim_mask_prediction.view(skim_mask_prediction.shape[0],1,1,skim_mask_prediction.shape[1],1).expand(-1,attention_mask.shape[1],attention_mask.shape[2],-1,self.block_size))
     attention_mask = attention_mask.view(*origin_shape)
 
+def convert_block_mask_to_token(mask, block_size):
+    mask = mask.unsqueeze(-1).repeat(1,1,block_size).view(mask.shape[0],-1)
+    return mask
+
 def compute_skim_prediction_aligned(skim_mask, block_size):
     """
     compute the skim prediction for a batch of input to align
     skim_indices [batch, sequence_length]
-        0 for skimming
-        1 for remained
+        False for skimming
+        True for remained
     """
     skim_mask = skim_mask.softmax(dim=-1)
 
@@ -230,9 +234,9 @@ def compute_skim_prediction_aligned(skim_mask, block_size):
     aligned_skim_mask = torch.zeros_like(skim_mask_prediction)
     aligned_skim_mask = aligned_skim_mask.scatter(dim=1, index=skim_indices, value=1)
 
-    aligned_skim_mask = aligned_skim_mask.unsqueeze(-1).repeat(1,1,block_size).view(aligned_skim_mask.shape[0],-1)
+    aligned_skim_mask = convert_block_mask_to_token(aligned_skim_mask,block_size)
 
-    return aligned_skim_mask
+    return aligned_skim_mask.to(dtype=torch.bool)
 
 def trunc_with_mask_batched(input, mask, dim):
     """
@@ -249,7 +253,7 @@ def trunc_with_mask_batched(input, mask, dim):
     transpose_shape = list(input.shape)
     transpose_shape[1] = -1
 
-    trunc_input = input[mask.to(dtype=torch.bool)].view(transpose_shape)
+    trunc_input = input[mask].view(transpose_shape)
 
     if dim != 1:
         trunc_input = trunc_input.transpose(1, dim)
@@ -650,7 +654,7 @@ class BertEncoder(nn.Module):
         all_hidden_states = () if output_hidden_states else None
         all_self_attentions = () if output_attentions else None
         all_cross_attentions = () if output_attentions and self.config.add_cross_attention else None
-        all_skim_mask = ()
+        all_skim_mask = list()
 
         next_decoder_cache = () if use_cache else None
         for i, layer_module in enumerate(self.layer):
@@ -701,7 +705,6 @@ class BertEncoder(nn.Module):
                 all_self_attentions = all_self_attentions + (layer_outputs[1],)
                 if self.config.add_cross_attention:
                     all_cross_attentions = all_cross_attentions + (layer_outputs[2],)
-            all_skim_mask = all_skim_mask + (layer_outputs[-1],)
 
             # preform actual skim of input dim reduction with predicted mask
             if self.actual_skim:
@@ -709,6 +712,8 @@ class BertEncoder(nn.Module):
                 skim_mask_prediction = compute_skim_prediction_aligned(skim_mask, 32)
                 hidden_states = trunc_with_mask_batched(hidden_states, skim_mask_prediction, dim=1)
                 attention_mask = trunc_with_mask_batched(attention_mask, skim_mask_prediction, dim=3)
+
+            all_skim_mask.append((layer_outputs[-1], skim_mask_prediction,) if self.actual_skim else (layer_outputs[-1]))
 
         if output_hidden_states:
             all_hidden_states = all_hidden_states + (hidden_states,)

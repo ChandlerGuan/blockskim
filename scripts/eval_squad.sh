@@ -1,9 +1,12 @@
 OUTPUT_DIR=model/tmp/eval/debug
 DATA_DIR=datasets/squad
 
-if [ -d "$OUTPUT_DIR" ]; then
-  OUTPUT_DIR=${OUTPUT_DIR}_$(date +"%m-%d-%H-%M")
-fi
+EVAL_CKPT_DIR=model/block_skim/skim_0.001_balance_100/
+
+
+# if [ -d "$OUTPUT_DIR" ]; then
+#   OUTPUT_DIR=${OUTPUT_DIR}_$(date +"%m-%d-%H-%M")
+# fi
 
 mkdir -p ${OUTPUT_DIR}
 
@@ -31,10 +34,11 @@ mkdir -p ${OUTPUT_DIR}
 #   --overwrite_output_dir \
 #   --output_dir ${OUTPUT_DIR} 2>&1 | tee ${OUTPUT_DIR}/log_finetune.log
 
-python src/run_squad.py \
+CUDA_LAUNCH_BLOCKING=1 python src/run_squad.py \
   --model_type bert \
   --block_skim \
-  --model_name_or_path bert-base-uncased \
+  --actual_skim \
+  --model_name_or_path ${EVAL_CKPT_DIR} \
   --do_lower_case \
   --do_eval \
   --predict_file dev-v1.1.json \
@@ -43,5 +47,4 @@ python src/run_squad.py \
   --max_seq_length 512 \
   --doc_stride 128 \
   --overwrite_output_dir \
-  --overwrite_cache \
   --output_dir ${OUTPUT_DIR} 2>&1 | tee ${OUTPUT_DIR}/log_finetune.log

@@ -214,9 +214,10 @@ def train(args, train_dataset, model, tokenizer):
 
             if args.block_skim:
                 answer_mask = batch[-1]
-                all_skim_mask = outputs[-1]
-                blocked_answer_mask = answer_mask.view((-1, model.config.max_seq_length//model.config.block_size, model.config.block_size))
-                skim_label = (torch.sum(blocked_answer_mask, dim=-1)>1).to(dtype=torch.long)
+                all_skim_mask = outputs[-1][0]
+                # blocked_answer_mask = answer_mask.view((-1, model.config.max_seq_length//model.config.block_size, model.config.block_size))
+                # skim_label = (torch.sum(blocked_answer_mask, dim=-1)>1).to(dtype=torch.long)
+                skim_label = compute_skim_mask(answer_mask, args.max_seq_length//args.block_size, args.block_size)
                 all_skim_loss = [torch.nn.functional.cross_entropy(skim_mask.view(-1,2), skim_label.view(-1), weight=balance_weight) for skim_mask in all_skim_mask]
                 skim_loss = sum(all_skim_loss)
 
@@ -356,6 +357,23 @@ def evaluate(args, model, tokenizer, prefix=""):
                     )
             outputs = model(**inputs)
 
+            new_start_logits = torch.ones(batch[0].shape).to(args.device)*-100
+            new_end_logits = torch.ones(batch[0].shape).to(args.device)*-100
+            final_skim_mask = torch.ones_like(outputs.all_skim_mask[0][1],dtype=torch.bool)
+
+            if args.actual_skim:
+                for layer_idx, skim_mask_tuple in enumerate(outputs.all_skim_mask):
+                    new_final_skim_mask = final_skim_mask.clone()
+                    new_final_skim_mask[final_skim_mask] = skim_mask_tuple[1].view(-1)
+                    final_skim_mask = new_final_skim_mask
+
+            new_start_logits[final_skim_mask] = outputs[0].view(-1)
+            new_end_logits[final_skim_mask] = outputs[1].view(-1)
+
+            outputs.start_logits = new_start_logits
+            outputs.end_logits = new_end_logits
+
+
         for i, feature_index in enumerate(feature_indices):
             eval_feature = features[feature_index.item()]
             unique_id = int(eval_feature.unique_id)
@@ -365,7 +383,7 @@ def evaluate(args, model, tokenizer, prefix=""):
             if args.block_skim:
                 skim_label = compute_skim_mask(batch[-1][i], model.config.max_seq_length//model.config.block_size, model.config.block_size)
                 for layer_idx, skim_mask in enumerate(all_layer_skim_mask):
-                    skim_mask.extend(to_list(torch.argmax(outputs.all_skim_mask[layer_idx][i],axis=-1)))
+                    skim_mask.extend(to_list(torch.argmax(outputs.all_skim_mask[layer_idx][0][i],axis=-1)))
                 all_skim_label.extend(to_list(skim_label))
                 
                 assert len(all_skim_label) == len(all_layer_skim_mask[0])
@@ -397,7 +415,7 @@ def evaluate(args, model, tokenizer, prefix=""):
     evalTime = timeit.default_timer() - start_time
     logger.info("  Evaluation done in total %f secs (%f sec per example)", evalTime, evalTime / len(dataset))
 
-    if args.block_skim:
+    if args.block_skim and not args.actual_skim:
         from sklearn.metrics import classification_report
         for layer_idx in range(len(all_layer_skim_mask)):
             print(f'evaluating skim predictor of layer {layer_idx}')
@@ -714,9 +732,11 @@ def main():
     parser.add_argument("--threads", type=int, default=1, help="multiple threads for converting example to features")
 
     parser.add_argument("--block_skim", action="store_true", help="add block skim module")
+    parser.add_argument("--actual_skim", action="store_true", help="perform actual skimming on input seq dim.")
     parser.add_argument("--block_size", type=int, default=32, help="block size for block skim module")
     parser.add_argument("--skim_factor", default=0.0001, type=float, help="factor for skim predictor")
     parser.add_argument("--balance_factor", default=1, type=float, help="factor for skim predictor")
+
 
     args = parser.parse_args()
 
@@ -799,7 +819,8 @@ def main():
     )
     if args.block_skim:
         if args.model_type =='bert':
-            config.max_seq_length = args.max_seq_length
+            if args.actual_skim:
+                config.actual_skim = True
             config.block_size = args.block_size
             model = BertForQuestionAnsweringWithSkim.from_pretrained(
                 args.model_name_or_path,
