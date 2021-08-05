@@ -214,7 +214,7 @@ def train(args, train_dataset, model, tokenizer):
 
             if args.block_skim:
                 answer_mask = batch[-1]
-                all_skim_mask = outputs[-1][0]
+                all_skim_mask = outputs[-1]
                 # blocked_answer_mask = answer_mask.view((-1, model.config.max_seq_length//model.config.block_size, model.config.block_size))
                 # skim_label = (torch.sum(blocked_answer_mask, dim=-1)>1).to(dtype=torch.long)
                 skim_label = compute_skim_mask(answer_mask, args.max_seq_length//args.block_size, args.block_size)
@@ -357,21 +357,22 @@ def evaluate(args, model, tokenizer, prefix=""):
                     )
             outputs = model(**inputs)
 
-            new_start_logits = torch.ones(batch[0].shape).to(args.device)*-100
-            new_end_logits = torch.ones(batch[0].shape).to(args.device)*-100
-            final_skim_mask = torch.ones_like(outputs.all_skim_mask[0][1],dtype=torch.bool)
 
             if args.actual_skim:
+                new_start_logits = torch.ones(batch[0].shape).to(args.device)*-100
+                new_end_logits = torch.ones(batch[0].shape).to(args.device)*-100
+                final_skim_mask = torch.ones_like(outputs.all_skim_mask[0][1],dtype=torch.bool)
+
                 for layer_idx, skim_mask_tuple in enumerate(outputs.all_skim_mask):
                     new_final_skim_mask = final_skim_mask.clone()
                     new_final_skim_mask[final_skim_mask] = skim_mask_tuple[1].view(-1)
                     final_skim_mask = new_final_skim_mask
 
-            new_start_logits[final_skim_mask] = outputs[0].view(-1)
-            new_end_logits[final_skim_mask] = outputs[1].view(-1)
+                new_start_logits[final_skim_mask] = outputs[0].view(-1)
+                new_end_logits[final_skim_mask] = outputs[1].view(-1)
 
-            outputs.start_logits = new_start_logits
-            outputs.end_logits = new_end_logits
+                outputs.start_logits = new_start_logits
+                outputs.end_logits = new_end_logits
 
 
         for i, feature_index in enumerate(feature_indices):
@@ -381,7 +382,7 @@ def evaluate(args, model, tokenizer, prefix=""):
             output = [to_list(output[i]) for output in outputs.to_tuple() if isinstance(output, torch.Tensor)]
 
             if args.block_skim:
-                skim_label = compute_skim_mask(batch[-1][i], model.config.max_seq_length//model.config.block_size, model.config.block_size)
+                skim_label = compute_skim_mask(batch[-1][i], args.max_seq_length//args.block_size, args.block_size)
                 for layer_idx, skim_mask in enumerate(all_layer_skim_mask):
                     skim_mask.extend(to_list(torch.argmax(outputs.all_skim_mask[layer_idx][0][i],axis=-1)))
                 all_skim_label.extend(to_list(skim_label))
