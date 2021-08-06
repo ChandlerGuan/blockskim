@@ -332,7 +332,7 @@ def evaluate(args, model, tokenizer, prefix=""):
     logger.info("  Batch size = %d", args.eval_batch_size)
 
     num_hidden_layers = model.module.config.num_hidden_layers if isinstance(model, DataParallel) else model.config.num_hidden_layers
-    all_results = [[] for _ in range(num_hidden_layers)]
+    all_results = [] if args.actual_skim else [[] for _ in range(num_hidden_layers)]
     if args.block_skim:
         all_layer_skim_mask = [[] for _ in range(num_hidden_layers)]
         all_skim_label = []
@@ -375,14 +375,14 @@ def evaluate(args, model, tokenizer, prefix=""):
                     new_final_skim_mask[final_skim_mask] = skim_mask_tuple[1].view(-1)
                     final_skim_mask = new_final_skim_mask
 
-                new_start_logits[final_skim_mask] = outputs[0].view(-1)
-                new_end_logits[final_skim_mask] = outputs[1].view(-1)
+                    # new_start_logits[final_skim_mask] = outputs.start_logits[layer_idx].view(-1)
+                    # new_end_logits[final_skim_mask] = outputs.end_logits[layer_idx].view(-1)
+
+                new_start_logits[final_skim_mask] = outputs.start_logits[-1].view(-1)
+                new_end_logits[final_skim_mask] = outputs.end_logits[-1].view(-1)
 
                 outputs.start_logits = new_start_logits
                 outputs.end_logits = new_end_logits
-
-
-
 
         for i, feature_index in enumerate(feature_indices):
 
@@ -390,16 +390,16 @@ def evaluate(args, model, tokenizer, prefix=""):
                 skim_label = compute_skim_mask(batch[-1][i], args.max_seq_length//args.block_size, args.block_size)
                 all_skim_label.extend(to_list(skim_label))
 
-            for layer_index in range(num_hidden_layers):
+            if args.actual_skim:
                 eval_feature = features[feature_index.item()]
                 unique_id = int(eval_feature.unique_id)
 
-                # start_logits, end_logits
-                # output = [to_list(output[layer_index][i]) for output in outputs.to_tuple() if isinstance(output, list) and output]
-                output = [to_list(outputs.start_logits[layer_index][i]), to_list(outputs.end_logits[layer_index][i])]
+                output = [to_list(output[i]) for output in outputs.to_tuple() if isinstance(output, torch.Tensor)]
 
                 if args.block_skim:
-                    all_layer_skim_mask[layer_index].extend(to_list(torch.argmax(outputs.all_skim_mask[layer_index][0][i],axis=-1)))
+                    for layer_idx, skim_mask in enumerate(all_layer_skim_mask):
+                        skim_mask.extend(to_list(torch.argmax(outputs.all_skim_mask[layer_idx][0][i],axis=-1)))
+                    
                     assert len(all_skim_label) == len(all_layer_skim_mask[0])
 
                 # Some models (XLNet, XLM) use 5 arguments for their predictions, while the other "simpler"
@@ -424,7 +424,43 @@ def evaluate(args, model, tokenizer, prefix=""):
                     start_logits, end_logits = output
                     result = SquadResult(unique_id, start_logits, end_logits)
 
-                all_results[layer_index].append(result)
+                all_results.append(result)
+            else:
+                for layer_index in range(num_hidden_layers):
+                    eval_feature = features[feature_index.item()]
+                    unique_id = int(eval_feature.unique_id)
+
+                    # start_logits, end_logits
+                    # output = [to_list(output[layer_index][i]) for output in outputs.to_tuple() if isinstance(output, list) and output]
+                    output = [to_list(outputs.start_logits[layer_index][i]), to_list(outputs.end_logits[layer_index][i])]
+
+                    if args.block_skim:
+                        all_layer_skim_mask[layer_index].extend(to_list(torch.argmax(outputs.all_skim_mask[layer_index][0][i],axis=-1)))
+                        assert len(all_skim_label) == len(all_layer_skim_mask[0])
+
+                    # Some models (XLNet, XLM) use 5 arguments for their predictions, while the other "simpler"
+                    # models only use two.
+                    if len(output) >= 5:
+                        start_logits = output[0]
+                        start_top_index = output[1]
+                        end_logits = output[2]
+                        end_top_index = output[3]
+                        cls_logits = output[4]
+
+                        result = SquadResult(
+                            unique_id,
+                            start_logits,
+                            end_logits,
+                            start_top_index=start_top_index,
+                            end_top_index=end_top_index,
+                            cls_logits=cls_logits,
+                        )
+
+                    else:
+                        start_logits, end_logits = output
+                        result = SquadResult(unique_id, start_logits, end_logits)
+
+                    all_results[layer_index].append(result)
 
     evalTime = timeit.default_timer() - start_time
     logger.info("  Evaluation done in total %f secs (%f sec per example)", evalTime, evalTime / len(dataset))
@@ -444,8 +480,7 @@ def evaluate(args, model, tokenizer, prefix=""):
     else:
         output_null_log_odds_file = None
 
-
-    for layer_index in range(num_hidden_layers):
+    if args.actual_skim:
         # XLNet and XLM use a more complex post-processing procedure
         if args.model_type in ["xlnet", "xlm"]:
             start_n_top = model.config.start_n_top if hasattr(model, "config") else model.module.config.start_n_top
@@ -454,7 +489,7 @@ def evaluate(args, model, tokenizer, prefix=""):
             predictions = compute_predictions_log_probs(
                 examples,
                 features,
-                all_results[layer_index],
+                all_results,
                 args.n_best_size,
                 args.max_answer_length,
                 output_prediction_file,
@@ -470,7 +505,7 @@ def evaluate(args, model, tokenizer, prefix=""):
             predictions = compute_predictions_logits(
                 examples,
                 features,
-                all_results[layer_index],
+                all_results,
                 args.n_best_size,
                 args.max_answer_length,
                 args.do_lower_case,
@@ -485,7 +520,48 @@ def evaluate(args, model, tokenizer, prefix=""):
 
         # Compute the F1 and exact scores.
         results = squad_evaluate(examples, predictions)
-        logger.info(f"layer {layer_index} results: {results}")
+    else:
+        for layer_index in range(num_hidden_layers):
+            # XLNet and XLM use a more complex post-processing procedure
+            if args.model_type in ["xlnet", "xlm"]:
+                start_n_top = model.config.start_n_top if hasattr(model, "config") else model.module.config.start_n_top
+                end_n_top = model.config.end_n_top if hasattr(model, "config") else model.module.config.end_n_top
+
+                predictions = compute_predictions_log_probs(
+                    examples,
+                    features,
+                    all_results[layer_index],
+                    args.n_best_size,
+                    args.max_answer_length,
+                    output_prediction_file,
+                    output_nbest_file,
+                    output_null_log_odds_file,
+                    start_n_top,
+                    end_n_top,
+                    args.version_2_with_negative,
+                    tokenizer,
+                    args.verbose_logging,
+                )
+            else:
+                predictions = compute_predictions_logits(
+                    examples,
+                    features,
+                    all_results[layer_index],
+                    args.n_best_size,
+                    args.max_answer_length,
+                    args.do_lower_case,
+                    output_prediction_file,
+                    output_nbest_file,
+                    output_null_log_odds_file,
+                    args.verbose_logging,
+                    args.version_2_with_negative,
+                    args.null_score_diff_threshold,
+                    tokenizer,
+                )
+
+            # Compute the F1 and exact scores.
+            results = squad_evaluate(examples, predictions)
+            logger.info(f"layer {layer_index} results: {results}")
     return results
 
 
