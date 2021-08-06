@@ -713,7 +713,7 @@ class BertEncoder(nn.Module):
                 hidden_states = trunc_with_mask_batched(hidden_states, skim_mask_prediction, dim=1)
                 attention_mask = trunc_with_mask_batched(attention_mask, skim_mask_prediction, dim=3)
 
-            all_skim_mask.append((layer_outputs[-1], skim_mask_prediction,) if self.actual_skim else (layer_outputs[-1]))
+            all_skim_mask.append((layer_outputs[-1], skim_mask_prediction,) if self.actual_skim else (layer_outputs[-1],))
 
         if output_hidden_states:
             all_hidden_states = all_hidden_states + (hidden_states,)
@@ -1889,7 +1889,7 @@ class BertForQuestionAnswering(BertPreTrainedModel):
         self.num_labels = config.num_labels
 
         self.bert = BertModel(config, add_pooling_layer=False)
-        self.qa_outputs = nn.Linear(config.hidden_size, config.num_labels)
+        self.qa_outputs = nn.ModuleList([nn.Linear(config.hidden_size, config.num_labels) for _ in range(config.num_hidden_layers)])
 
         self.init_weights()
 
@@ -1934,18 +1934,11 @@ class BertForQuestionAnswering(BertPreTrainedModel):
             head_mask=head_mask,
             inputs_embeds=inputs_embeds,
             output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
+            output_hidden_states=True,
+            return_dict=True,
         )
 
-        sequence_output = outputs[0]
-
-        logits = self.qa_outputs(sequence_output)
-        start_logits, end_logits = logits.split(1, dim=-1)
-        start_logits = start_logits.squeeze(-1).contiguous()
-        end_logits = end_logits.squeeze(-1).contiguous()
-
-        total_loss = None
+        all_loss, all_start_logits, all_end_logits = list(), list(), list()
         if start_positions is not None and end_positions is not None:
             # If we are on multi-GPU, split add a dimension
             if len(start_positions.size()) > 1:
@@ -1953,23 +1946,46 @@ class BertForQuestionAnswering(BertPreTrainedModel):
             if len(end_positions.size()) > 1:
                 end_positions = end_positions.squeeze(-1)
             # sometimes the start/end positions are outside our model inputs, we ignore these terms
-            ignored_index = start_logits.size(1)
+            ignored_index = outputs.hidden_states[0].size(1)
             start_positions = start_positions.clamp(0, ignored_index)
             end_positions = end_positions.clamp(0, ignored_index)
 
-            loss_fct = CrossEntropyLoss(ignore_index=ignored_index)
-            start_loss = loss_fct(start_logits, start_positions)
-            end_loss = loss_fct(end_logits, end_positions)
-            total_loss = (start_loss + end_loss) / 2
+        for layer_idx, qa_output in enumerate(self.qa_outputs):
+
+            # num 0 of hidden_states is embedding layer output
+            sequence_output = outputs.hidden_states[layer_idx+1]
+
+            if layer_idx != len(self.qa_outputs)-1:
+                sequence_output = sequence_output.detach()
+
+            logits = qa_output(sequence_output)
+            start_logits, end_logits = logits.split(1, dim=-1)
+            start_logits = start_logits.squeeze(-1).contiguous()
+            end_logits = end_logits.squeeze(-1).contiguous()
+
+            # assert start_logits.size(1) == outputs.hidden_states[0].size(1)
+
+            all_start_logits.append(start_logits)
+            all_end_logits.append(end_logits)
+
+            total_loss = None
+            if start_positions is not None and end_positions is not None:
+
+                loss_fct = CrossEntropyLoss(ignore_index=ignored_index)
+                start_loss = loss_fct(start_logits, start_positions)
+                end_loss = loss_fct(end_logits, end_positions)
+                total_loss = (start_loss + end_loss) / 2
+
+                all_loss.append(total_loss)
 
         if not return_dict:
             output = (start_logits, end_logits) + outputs[2:]
             return ((total_loss,) + output) if total_loss is not None else output
 
         return QuestionAnsweringModelOutputWithSkim(
-            loss=total_loss,
-            start_logits=start_logits,
-            end_logits=end_logits,
+            loss=all_loss,
+            start_logits=all_start_logits,
+            end_logits=all_end_logits,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
             all_skim_mask=outputs.all_skim_mask,
@@ -1994,7 +2010,7 @@ def test_BertForQuestionAnswering():
     config = BertConfig.from_pretrained('bert-base-uncased')
     config.max_seq_length = 512
     config.block_size = 32
-    config.actual_skim = True
+    config.actual_skim = False
 
     bert = BertForQuestionAnswering(config)
 

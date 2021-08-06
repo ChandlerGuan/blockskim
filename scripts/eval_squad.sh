@@ -1,7 +1,7 @@
 OUTPUT_DIR=model/tmp/eval/debug
 DATA_DIR=datasets/squad
 
-EVAL_CKPT_DIR=model/block_skim/skim_0.001_balance_100/
+EVAL_CKPT_DIR=model/block_skim/skim_1_balance_20_08-05-16-54/
 
 
 # if [ -d "$OUTPUT_DIR" ]; then
@@ -37,7 +37,6 @@ mkdir -p ${OUTPUT_DIR}
 CUDA_LAUNCH_BLOCKING=1 python src/run_squad.py \
   --model_type bert \
   --block_skim \
-  --actual_skim \
   --model_name_or_path ${EVAL_CKPT_DIR} \
   --do_lower_case \
   --do_eval \
