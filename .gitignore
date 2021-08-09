@@ -1,6 +1,7 @@
 # BlockSkim
 model
 datasets
+tmp
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
