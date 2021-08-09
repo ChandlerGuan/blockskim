@@ -47,6 +47,7 @@ from transformers.data.metrics.squad_metrics import (
 )
 from transformers.data.processors.squad import SquadResult
 from transformers.trainer_utils import is_main_process
+from prof.cal_attn_distrib import cal_attn_distrib
 
 
 try:
@@ -331,6 +332,8 @@ def evaluate(args, model, tokenizer, prefix=""):
         all_skim_label = []
     start_time = timeit.default_timer()
 
+    all_junk_attn, all_ans_attn = [[] for _ in range(model.module.config.num_hidden_layers if isinstance(model, DataParallel) else model.config.num_hidden_layers)], [[] for _ in range(model.module.config.num_hidden_layers if isinstance(model, DataParallel) else model.config.num_hidden_layers)]
+
     for batch in tqdm(eval_dataloader, desc="Evaluating"):
         model.eval()
         batch = tuple(t.to(args.device) for t in batch)
@@ -355,8 +358,12 @@ def evaluate(args, model, tokenizer, prefix=""):
                     inputs.update(
                         {"langs": (torch.ones(batch[0].shape, dtype=torch.int64) * args.lang_id).to(args.device)}
                     )
-            outputs = model(**inputs)
+            outputs = model(**inputs, output_attentions=True)
 
+            for layer_idx in range(model.module.config.num_hidden_layers if isinstance(model, DataParallel) else model.config.num_hidden_layers):
+                junk_attn, ans_attn = cal_attn_distrib(outputs.attentions[layer_idx], batch[2], batch[-1])
+                all_junk_attn[layer_idx].extend(junk_attn)
+                all_ans_attn[layer_idx].extend(ans_attn)
 
             if args.actual_skim:
                 new_start_logits = torch.ones(batch[0].shape).to(args.device)*-100
@@ -412,6 +419,9 @@ def evaluate(args, model, tokenizer, prefix=""):
                 result = SquadResult(unique_id, start_logits, end_logits)
 
             all_results.append(result)
+
+    import IPython
+    IPython.embed()
 
     evalTime = timeit.default_timer() - start_time
     logger.info("  Evaluation done in total %f secs (%f sec per example)", evalTime, evalTime / len(dataset))

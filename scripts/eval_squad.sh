@@ -34,10 +34,8 @@ mkdir -p ${OUTPUT_DIR}
 #   --overwrite_output_dir \
 #   --output_dir ${OUTPUT_DIR} 2>&1 | tee ${OUTPUT_DIR}/log_finetune.log
 
-CUDA_LAUNCH_BLOCKING=1 python src/run_squad.py \
+python src/run_squad.py \
   --model_type bert \
-  --block_skim \
-  --actual_skim \
   --model_name_or_path ${EVAL_CKPT_DIR} \
   --do_lower_case \
   --do_eval \
