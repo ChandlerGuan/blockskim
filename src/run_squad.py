@@ -214,7 +214,7 @@ def train(args, train_dataset, model, tokenizer):
 
             if args.block_skim:
                 answer_mask = batch[-1]
-                all_skim_mask = outputs[-1]
+                all_skim_mask = outputs[-1][0]
                 # blocked_answer_mask = answer_mask.view((-1, model.config.max_seq_length//model.config.block_size, model.config.block_size))
                 # skim_label = (torch.sum(blocked_answer_mask, dim=-1)>1).to(dtype=torch.long)
                 skim_label = compute_skim_mask(answer_mask, args.max_seq_length//args.block_size, args.block_size)

@@ -1,7 +1,7 @@
 OUTPUT_DIR=model/tmp/eval/debug
-DATA_DIR=datasets/squad
+DATA_DIR=datasets/hotpotqa
 
-EVAL_CKPT_DIR=model/block_skim/skim_0.001_balance_100/
+EVAL_CKPT_DIR=model/hotpotqa/block_skim/skim_0.01_balance_100_08-11-13-44/
 
 
 # if [ -d "$OUTPUT_DIR" ]; then
@@ -36,15 +36,16 @@ mkdir -p ${OUTPUT_DIR}
 
 CUDA_LAUNCH_BLOCKING=1 python src/run_squad.py \
   --model_type bert \
-  --block_skim \
-  --actual_skim \
   --model_name_or_path ${EVAL_CKPT_DIR} \
   --do_lower_case \
   --do_eval \
-  --predict_file dev-v1.1.json \
+  --block_skim \
+  --predict_file gold_validation.json \
   --data_dir ${DATA_DIR} \
   --per_gpu_eval_batch_size=16 \
   --max_seq_length 512 \
   --doc_stride 128 \
   --overwrite_output_dir \
+  --overwrite_cache \
+  --threads 1 \
   --output_dir ${OUTPUT_DIR} 2>&1 | tee ${OUTPUT_DIR}/log_finetune.log

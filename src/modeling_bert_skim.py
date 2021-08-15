@@ -713,7 +713,7 @@ class BertEncoder(nn.Module):
                 hidden_states = trunc_with_mask_batched(hidden_states, skim_mask_prediction, dim=1)
                 attention_mask = trunc_with_mask_batched(attention_mask, skim_mask_prediction, dim=3)
 
-            all_skim_mask.append((layer_outputs[-1], skim_mask_prediction,) if self.actual_skim else (layer_outputs[-1]))
+            all_skim_mask.append((layer_outputs[-1], skim_mask_prediction,) if self.actual_skim else (layer_outputs[-1],))
 
         if output_hidden_states:
             all_hidden_states = all_hidden_states + (hidden_states,)

@@ -66,6 +66,8 @@ class BlockSkim(nn.Module):
 mask: [batch, sequence length], answer mask
 """
 def compute_skim_mask(mask, num_block, block_size):
+    # mask[mask!=1] = 0
+    mask[mask==2] = 1
     blocked_answer_mask = mask.view((-1, num_block, block_size))
     if blocked_answer_mask.shape[0]==1:
         blocked_answer_mask = blocked_answer_mask.squeeze(axis=0)

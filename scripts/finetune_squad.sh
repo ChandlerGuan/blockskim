@@ -1,15 +1,16 @@
-DATA_DIR=datasets/squad
+DATA_DIR=datasets/hotpotqa
 
 
-BALANCE_FACTOR=20
-SKIM_FACTOR=1
+# BALANCE_FACTOR=100
+# SKIM_FACTOR=1
 
-for BALANCE_FACTOR in 10 20  100
+for BALANCE_FACTOR in 100
 do
-for SKIM_FACTOR in 1 0.1 0.01 0.001
+for SKIM_FACTOR in 0.1 0.01 0.001
 do
 
-OUTPUT_DIR=model/block_skim/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
+# OUTPUT_DIR=model/hotpotqa/baseline/
+OUTPUT_DIR=model/hotpotqa/block_skim/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
 
 if [ -d "$OUTPUT_DIR" ]; then
   OUTPUT_DIR=${OUTPUT_DIR}_$(date +"%m-%d-%H-%M")
@@ -50,13 +51,13 @@ python src/run_squad.py \
   --do_lower_case \
   --do_train \
   --do_eval \
-  --train_file train-v1.1.json \
-  --predict_file dev-v1.1.json \
+  --train_file gold_train.json \
+  --predict_file gold_validation.json \
   --data_dir ${DATA_DIR} \
   --per_gpu_train_batch_size 12 \
   --per_gpu_eval_batch_size=16 \
   --learning_rate 3e-5 \
-  --num_train_epochs 1.0 \
+  --num_train_epochs 2.0 \
   --max_seq_length 512 \
   --doc_stride 128 \
   --save_steps 10000 \
