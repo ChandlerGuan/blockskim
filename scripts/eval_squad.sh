@@ -1,4 +1,3 @@
-OUTPUT_DIR=model/tmp/eval/debug
 DATA_DIR=datasets/squad
 
 EVAL_CKPT_DIR=model/block_skim/skim_0.001_balance_100/
@@ -8,7 +7,6 @@ EVAL_CKPT_DIR=model/block_skim/skim_0.001_balance_100/
 #   OUTPUT_DIR=${OUTPUT_DIR}_$(date +"%m-%d-%H-%M")
 # fi
 
-mkdir -p ${OUTPUT_DIR}
 
 # python src/run_qa_no_trainer.py \
 #   --model_name_or_path bert-base-uncased \
@@ -34,11 +32,19 @@ mkdir -p ${OUTPUT_DIR}
 #   --overwrite_output_dir \
 #   --output_dir ${OUTPUT_DIR} 2>&1 | tee ${OUTPUT_DIR}/log_finetune.log
 
+for LAYER_IDX in {0..11} 
+do
+for HEAD_IDX in {0..11} 
+do
+OUTPUT_DIR=model/tmp/eval/layer_${LAYER_IDX}_head_${HEAD_IDX}
+mkdir -p ${OUTPUT_DIR}
+
+
 CUDA_LAUNCH_BLOCKING=1 python src/run_squad.py \
   --model_type bert \
-  --block_skim \
-  --actual_skim \
   --model_name_or_path ${EVAL_CKPT_DIR} \
+  --head_pruning_idx ${HEAD_IDX} \
+  --head_pruning_layer ${LAYER_IDX} \
   --do_lower_case \
   --do_eval \
   --predict_file dev-v1.1.json \
@@ -48,3 +54,6 @@ CUDA_LAUNCH_BLOCKING=1 python src/run_squad.py \
   --doc_stride 128 \
   --overwrite_output_dir \
   --output_dir ${OUTPUT_DIR} 2>&1 | tee ${OUTPUT_DIR}/log_finetune.log
+
+done
+done

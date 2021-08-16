@@ -306,6 +306,8 @@ def train(args, train_dataset, model, tokenizer):
 def evaluate(args, model, tokenizer, prefix=""):
     dataset, examples, features = load_and_cache_examples(args, tokenizer, evaluate=True, output_examples=True)
 
+    model.prune_heads({args.head_pruning_layer:[args.head_pruning_idx,]})
+
     if not os.path.exists(args.output_dir) and args.local_rank in [-1, 0]:
         os.makedirs(args.output_dir)
 
@@ -470,6 +472,11 @@ def evaluate(args, model, tokenizer, prefix=""):
 
     # Compute the F1 and exact scores.
     results = squad_evaluate(examples, predictions)
+
+    with open('tmp/head_pruning/single_head.txt', 'a') as output_file:
+        output_file.write(f"layer: {args.head_pruning_layer}, head: {args.head_pruning_idx}\n")
+        output_file.write(f"{results}\n")
+
     return results
 
 
@@ -737,6 +744,9 @@ def main():
     parser.add_argument("--block_size", type=int, default=32, help="block size for block skim module")
     parser.add_argument("--skim_factor", default=0.0001, type=float, help="factor for skim predictor")
     parser.add_argument("--balance_factor", default=1, type=float, help="factor for skim predictor")
+
+    parser.add_argument("--head_pruning_layer", type=int, default=0, help="layer to prune head")
+    parser.add_argument("--head_pruning_idx", type=int, default=0, help="head to prune")
 
 
     args = parser.parse_args()
