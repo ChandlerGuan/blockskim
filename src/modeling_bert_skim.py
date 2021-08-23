@@ -426,14 +426,25 @@ class BertSelfAttention(nn.Module):
         # Normalize the attention scores to probabilities.
         attention_probs = nn.Softmax(dim=-1)(attention_scores)
 
-        # This is actually dropping out entire tokens to attend to, which might
-        # seem a bit unusual, but is taken from the original Transformer paper.
-        attention_probs = self.dropout(attention_probs)
-
         # chandler
         # skim_mask predicted by block skim module
         # skim_mask: [batch_size, max_seq_length/block_size]
         skim_mask = self.skim_predictor(attention_probs)
+
+        diagonal_attention_mask = torch.zeros_like(attention_probs)
+        block_size = 32
+        seq_len = diagonal_attention_mask.shape[-1]
+        block_num = seq_len//block_size
+        diagonal_attention_mask = diagonal_attention_mask.view(-1, diagonal_attention_mask.shape[1], block_num, block_size, block_num, block_size)
+        for i in range(block_num):
+            diagonal_attention_mask[:,:,i,:,i,:] = 1
+        diagonal_attention_mask = diagonal_attention_mask.view(-1,diagonal_attention_mask.shape[1],seq_len, seq_len)
+        attention_probs = torch.mul(attention_probs, diagonal_attention_mask)
+        
+
+        # This is actually dropping out entire tokens to attend to, which might
+        # seem a bit unusual, but is taken from the original Transformer paper.
+        attention_probs = self.dropout(attention_probs)
 
         # Mask heads if we want to
         if head_mask is not None:
@@ -713,7 +724,7 @@ class BertEncoder(nn.Module):
                 hidden_states = trunc_with_mask_batched(hidden_states, skim_mask_prediction, dim=1)
                 attention_mask = trunc_with_mask_batched(attention_mask, skim_mask_prediction, dim=3)
 
-            all_skim_mask.append((layer_outputs[-1], skim_mask_prediction,) if self.actual_skim else (layer_outputs[-1]))
+            all_skim_mask.append((layer_outputs[-1], skim_mask_prediction,) if self.actual_skim else (layer_outputs[-1],))
 
         if output_hidden_states:
             all_hidden_states = all_hidden_states + (hidden_states,)
