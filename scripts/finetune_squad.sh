@@ -2,7 +2,7 @@ DATA_DIR=datasets/hotpotqa
 
 
 BALANCE_FACTOR=100
-SKIM_FACTOR=0.01
+SKIM_FACTOR=0.001
 
 # for BALANCE_FACTOR in 100
 # do
@@ -47,6 +47,7 @@ python src/run_squad.py \
   --block_skim \
   --skim_factor ${SKIM_FACTOR} \
   --balance_factor ${BALANCE_FACTOR} \
+  --evidence_factor 1 \
   --model_name_or_path bert-base-uncased \
   --do_lower_case \
   --do_train \
