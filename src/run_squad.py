@@ -61,6 +61,8 @@ logger = logging.getLogger(__name__)
 from modeling_bert_skim import BertForQuestionAnswering as BertForQuestionAnsweringWithSkim
 from modeling_blockskim import compute_skim_mask
 from squad.transformer_squad_processor import SquadV1Processor, SquadV2Processor
+from utils.calculate_prune_dict import calculate_prune_dict
+
 
 MODEL_CONFIG_CLASSES = list(MODEL_FOR_QUESTION_ANSWERING_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
@@ -82,6 +84,8 @@ def train(args, train_dataset, model, tokenizer):
     """Train the model"""
     if args.local_rank in [-1, 0]:
         tb_writer = SummaryWriter(args.output_dir)
+
+    model.prune_heads(calculate_prune_dict())
 
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
@@ -306,7 +310,6 @@ def train(args, train_dataset, model, tokenizer):
 def evaluate(args, model, tokenizer, prefix=""):
     dataset, examples, features = load_and_cache_examples(args, tokenizer, evaluate=True, output_examples=True)
 
-    model.prune_heads({args.head_pruning_layer:[args.head_pruning_idx,]})
 
     if not os.path.exists(args.output_dir) and args.local_rank in [-1, 0]:
         os.makedirs(args.output_dir)

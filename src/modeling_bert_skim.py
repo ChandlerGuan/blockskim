@@ -997,6 +997,7 @@ class BertModel(BertPreTrainedModel):
         """
         for layer, heads in heads_to_prune.items():
             self.encoder.layer[layer].attention.prune_heads(heads)
+            self.encoder.layer[layer].attention.self.skim_predictor.prune_heads(heads)
 
     @add_start_docstrings_to_model_forward(BERT_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
     @add_code_sample_docstrings(
@@ -2004,7 +2005,24 @@ def test_BertForQuestionAnswering():
 
     print(y[0].shape)
 
+def test_head_prune():
+    config = BertConfig.from_pretrained('bert-base-uncased')
+    config.max_seq_length = 512
+    config.block_size = 32
+    config.actual_skim = False
+
+    bert = BertForQuestionAnswering(config)
+
+    bert.prune_heads({0:[0,1], 1:[2,5]})
+
+    hidden_states = torch.randint(0,15,(2, config.max_seq_length))
+
+    y = bert(hidden_states,return_dict=False)
+
+    print(y[0].shape)
+
 
 if __name__ == "__main__":
     # test_BertSelfAttention()
-    test_BertForQuestionAnswering()
+    # test_BertForQuestionAnswering()
+    test_head_prune()
