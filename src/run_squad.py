@@ -213,6 +213,24 @@ def train(args, train_dataset, model, tokenizer):
             # model outputs are always tuple in transformers (see doc)
 
             if args.block_skim:
+                if args.actual_skim:
+                    new_start_logits = torch.ones(batch[0].shape).to(args.device)*-100
+                    new_end_logits = torch.ones(batch[0].shape).to(args.device)*-100
+                    final_skim_mask = torch.ones_like(outputs.all_skim_mask[0][1],dtype=torch.bool)
+
+                    for layer_idx, skim_mask_tuple in enumerate(outputs.all_skim_mask):
+                        new_final_skim_mask = final_skim_mask.clone()
+                        new_final_skim_mask[final_skim_mask] = skim_mask_tuple[1].view(-1)
+                        final_skim_mask = new_final_skim_mask
+
+                    new_start_logits[final_skim_mask] = outputs[1].view(-1)
+                    new_end_logits[final_skim_mask] = outputs[2].view(-1)
+                    loss_fct = torch.nn.CrossEntropyLoss()
+                    start_loss = loss_fct(new_start_logits, batch[3])
+                    end_loss = loss_fct(new_end_logits, batch[4])
+                    qa_loss = (start_loss + end_loss) / 2
+                else:
+                    qa_loss = outputs[0]
                 answer_mask = batch[-1]
                 all_skim_mask = outputs[-1]
                 # blocked_answer_mask = answer_mask.view((-1, model.config.max_seq_length//model.config.block_size, model.config.block_size))
@@ -221,7 +239,6 @@ def train(args, train_dataset, model, tokenizer):
                 all_skim_loss = [torch.nn.functional.cross_entropy(skim_mask.view(-1,2), skim_label.view(-1), weight=balance_weight) for skim_mask in all_skim_mask]
                 skim_loss = sum(all_skim_loss)
 
-                qa_loss = outputs[0]
                 loss = args.skim_factor * skim_loss + qa_loss
             else:
                 loss = outputs[0]
@@ -484,7 +501,7 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
         input_dir,
         "cached_{}_{}_{}".format(
             "dev" if evaluate else "train",
-            list(filter(None, args.model_name_or_path.split("/"))).pop(),
+            list(filter(None, args.cache_name.split("/"))).pop() if args.cache_name else list(filter(None, args.model_name_or_path.split("/"))).pop(),
             str(args.max_seq_length),
         ),
     )
@@ -737,7 +754,7 @@ def main():
     parser.add_argument("--block_size", type=int, default=32, help="block size for block skim module")
     parser.add_argument("--skim_factor", default=0.0001, type=float, help="factor for skim predictor")
     parser.add_argument("--balance_factor", default=1, type=float, help="factor for skim predictor")
-
+    parser.add_argument("--cache_name", type=str, help="cached feature dir")
 
     args = parser.parse_args()
 
