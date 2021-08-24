@@ -85,7 +85,7 @@ def train(args, train_dataset, model, tokenizer):
     if args.local_rank in [-1, 0]:
         tb_writer = SummaryWriter(args.output_dir)
 
-    model.prune_heads(calculate_prune_dict())
+    model.prune_heads(calculate_prune_dict(k=args.pruning_k))
 
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
@@ -750,6 +750,8 @@ def main():
 
     parser.add_argument("--head_pruning_layer", type=int, default=0, help="layer to prune head")
     parser.add_argument("--head_pruning_idx", type=int, default=0, help="head to prune")
+
+    parser.add_argument("--pruning_k", type=int, default=0, help="topk heads to perform head pruning")
 
 
     args = parser.parse_args()
