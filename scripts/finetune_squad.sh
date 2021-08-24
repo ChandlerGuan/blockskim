@@ -1,15 +1,15 @@
 DATA_DIR=datasets/squad
 
 
-BALANCE_FACTOR=20
-SKIM_FACTOR=1
+BALANCE_FACTOR=100
+SKIM_FACTOR=0.0001
 
-for BALANCE_FACTOR in 10 20  100
-do
-for SKIM_FACTOR in 1 0.1 0.01 0.001
-do
+# for BALANCE_FACTOR in 10 20  100
+# do
+# for SKIM_FACTOR in 1 0.1 0.01 0.001
+# do
 
-OUTPUT_DIR=model/block_skim/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
+OUTPUT_DIR=model/block_skim_lr_boost/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
 
 if [ -d "$OUTPUT_DIR" ]; then
   OUTPUT_DIR=${OUTPUT_DIR}_$(date +"%m-%d-%H-%M")
@@ -63,5 +63,5 @@ python src/run_squad.py \
   --overwrite_output_dir \
   --output_dir ${OUTPUT_DIR} 2>&1 | tee ${OUTPUT_DIR}/log_finetune.log
 
-done
-done
+# done
+# done

@@ -97,12 +97,27 @@ def train(args, train_dataset, model, tokenizer):
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
         {
-            "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+            "params": [p for n, p in model.named_parameters() if (not any(nd in n for nd in no_decay) and not 'skim_predictor' in n)],
             "weight_decay": args.weight_decay,
+            "lr": args.learning_rate,
         },
-        {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
+        {
+            "params": [p for n, p in model.named_parameters() if (any(nd in n for nd in no_decay) and not 'skim_predictor' in n)], 
+            "weight_decay": 0.0,
+            "lr": args.learning_rate,
+        },
+        {
+            "params": [p for n, p in model.named_parameters() if (not any(nd in n for nd in no_decay) and 'skim_predictor' in n)],
+            "weight_decay": args.weight_decay,
+            "lr": args.learning_rate/args.skim_factor,
+        },
+        {
+            "params": [p for n, p in model.named_parameters() if (any(nd in n for nd in no_decay) and 'skim_predictor' in n)], 
+            "weight_decay": 0.0,
+            "lr": args.learning_rate/args.skim_factor,
+        },
     ]
-    optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+    optimizer = AdamW(optimizer_grouped_parameters, eps=args.adam_epsilon)
     scheduler = get_linear_schedule_with_warmup(
         optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
     )
@@ -214,7 +229,7 @@ def train(args, train_dataset, model, tokenizer):
 
             if args.block_skim:
                 answer_mask = batch[-1]
-                all_skim_mask = outputs[-1]
+                all_skim_mask = outputs[-1][0]
                 # blocked_answer_mask = answer_mask.view((-1, model.config.max_seq_length//model.config.block_size, model.config.block_size))
                 # skim_label = (torch.sum(blocked_answer_mask, dim=-1)>1).to(dtype=torch.long)
                 skim_label = compute_skim_mask(answer_mask, args.max_seq_length//args.block_size, args.block_size)
