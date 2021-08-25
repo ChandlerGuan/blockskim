@@ -637,6 +637,7 @@ class BertEncoder(nn.Module):
         self.layer = nn.ModuleList([BertLayer(config) for _ in range(config.num_hidden_layers)])
 
         self.actual_skim = config.actual_skim if hasattr(config, 'actual_skim') else False
+        self.block_size = config.block_size
 
     def forward(
         self,
@@ -709,7 +710,7 @@ class BertEncoder(nn.Module):
             # preform actual skim of input dim reduction with predicted mask
             if self.actual_skim:
                 skim_mask = layer_outputs[-1]
-                skim_mask_prediction = compute_skim_prediction_aligned(skim_mask, 32)
+                skim_mask_prediction = compute_skim_prediction_aligned(skim_mask, self.block_size)
                 hidden_states = trunc_with_mask_batched(hidden_states, skim_mask_prediction, dim=1)
                 attention_mask = trunc_with_mask_batched(attention_mask, skim_mask_prediction, dim=3)
 
@@ -1893,6 +1894,8 @@ class BertForQuestionAnswering(BertPreTrainedModel):
 
         self.init_weights()
 
+        self.actual_skim = config.actual_skim if hasattr(config, 'actual_skim') else False
+
     @add_start_docstrings_to_model_forward(BERT_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
     @add_code_sample_docstrings(
         tokenizer_class=_TOKENIZER_FOR_DOC,
@@ -1939,7 +1942,7 @@ class BertForQuestionAnswering(BertPreTrainedModel):
         )
 
         all_loss, all_start_logits, all_end_logits = list(), list(), list()
-        if start_positions is not None and end_positions is not None:
+        if start_positions is not None and end_positions is not None and not self.actual_skim:
             # If we are on multi-GPU, split add a dimension
             if len(start_positions.size()) > 1:
                 start_positions = start_positions.squeeze(-1)
@@ -1969,7 +1972,7 @@ class BertForQuestionAnswering(BertPreTrainedModel):
             all_end_logits.append(end_logits)
 
             total_loss = None
-            if start_positions is not None and end_positions is not None:
+            if start_positions is not None and end_positions is not None and not self.actual_skim:
 
                 loss_fct = CrossEntropyLoss(ignore_index=ignored_index)
                 start_loss = loss_fct(start_logits, start_positions)

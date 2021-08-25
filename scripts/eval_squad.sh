@@ -38,6 +38,7 @@ CUDA_LAUNCH_BLOCKING=1 python src/run_squad.py \
   --model_type bert \
   --block_skim \
   --model_name_or_path ${EVAL_CKPT_DIR} \
+  --cache_name bert-base-uncased \
   --do_lower_case \
   --do_eval \
   --predict_file dev-v1.1.json \

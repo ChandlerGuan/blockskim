@@ -168,7 +168,8 @@ def train(args, train_dataset, model, tokenizer):
 
     tr_loss, logging_loss = 0.0, 0.0
     num_hidden_layers = model.module.config.num_hidden_layers if isinstance(model, DataParallel) else model.config.num_hidden_layers
-    tr_layer_loss, logging_layer_loss = [0.0 for _ in range(num_hidden_layers)], [0.0 for _ in range(num_hidden_layers)]
+    if not args.actual_skim:
+        tr_layer_loss, logging_layer_loss = [0.0 for _ in range(num_hidden_layers)], [0.0 for _ in range(num_hidden_layers)]
     if args.block_skim:
         tr_qa_loss, logging_qa_loss, tr_skim_loss, logging_skim_loss = 0.0, 0.0, 0.0, 0.0
         balance_weight = torch.tensor([1, args.balance_factor]).to(args.device)
@@ -215,16 +216,40 @@ def train(args, train_dataset, model, tokenizer):
             # model outputs are always tuple in transformers (see doc)
 
             if args.block_skim:
-                answer_mask = batch[-1]
-                all_skim_mask = outputs[-1][0]
-                # blocked_answer_mask = answer_mask.view((-1, model.config.max_seq_length//model.config.block_size, model.config.block_size))
-                # skim_label = (torch.sum(blocked_answer_mask, dim=-1)>1).to(dtype=torch.long)
-                skim_label = compute_skim_mask(answer_mask, args.max_seq_length//args.block_size, args.block_size)
-                all_skim_loss = [torch.nn.functional.cross_entropy(skim_mask.view(-1,2), skim_label.view(-1), weight=balance_weight) for skim_mask in all_skim_mask]
-                skim_loss = sum(all_skim_loss)
+                if args.actual_skim:
+                    new_start_logits = torch.ones_like(batch[0],dtype=torch.float32)*-100
+                    new_end_logits = torch.ones_like(batch[0],dtype=torch.float32)*-100
+                    final_skim_mask = torch.ones_like(outputs.all_skim_mask[0][1],dtype=torch.bool)
 
-                qa_loss = sum(outputs[0])
-                loss = args.skim_factor * skim_loss + qa_loss
+                    for layer_idx, skim_mask_tuple in enumerate(outputs.all_skim_mask):
+                        new_final_skim_mask = final_skim_mask.clone()
+                        new_final_skim_mask[final_skim_mask] = skim_mask_tuple[1].view(-1)
+                        final_skim_mask = new_final_skim_mask
+
+                        new_start_logits[final_skim_mask] = outputs.start_logits[layer_idx].view(-1)
+                        new_end_logits[final_skim_mask] = outputs.end_logits[layer_idx].view(-1)
+
+                    ignored_index = new_start_logits.size(1)
+
+                    loss_fct = torch.nn.CrossEntropyLoss(ignore_index=ignored_index)
+                    start_positions = batch[3].clamp(0, ignored_index)
+                    end_positions = batch[4].clamp(0, ignored_index)
+                    start_loss = loss_fct(new_start_logits, start_positions)
+                    end_loss = loss_fct(new_end_logits, end_positions)
+                    qa_loss = (start_loss + end_loss) / 2
+                    skim_loss = qa_loss
+                    loss = qa_loss
+                else:
+                    qa_loss = sum(outputs[0])
+                    answer_mask = batch[-1]
+                    all_skim_mask = outputs[-1][0]
+                    # blocked_answer_mask = answer_mask.view((-1, model.config.max_seq_length//model.config.block_size, model.config.block_size))
+                    # skim_label = (torch.sum(blocked_answer_mask, dim=-1)>1).to(dtype=torch.long)
+                    skim_label = compute_skim_mask(answer_mask, args.max_seq_length//args.block_size, args.block_size)
+                    all_skim_loss = [torch.nn.functional.cross_entropy(skim_mask.view(-1,2), skim_label.view(-1), weight=balance_weight) for skim_mask in all_skim_mask]
+                    skim_loss = sum(all_skim_loss)
+
+                    loss = args.skim_factor * skim_loss + qa_loss
             else:
                 loss = sum(outputs[0])
 
@@ -250,8 +275,9 @@ def train(args, train_dataset, model, tokenizer):
             if args.block_skim:
                 tr_qa_loss += qa_loss.item()
                 tr_skim_loss += skim_loss.item()
-            for layer_idx in range(num_hidden_layers):
-                tr_layer_loss[layer_idx] += outputs[0][layer_idx].item()
+            if not args.actual_skim:
+                for layer_idx in range(num_hidden_layers):
+                    tr_layer_loss[layer_idx] += outputs[0][layer_idx].item()
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 if args.fp16:
                     torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
@@ -278,9 +304,10 @@ def train(args, train_dataset, model, tokenizer):
                         tb_writer.add_scalar("qa_loss", (tr_qa_loss - logging_qa_loss) / args.logging_steps, global_step)
                         logging_qa_loss = tr_qa_loss
                         logging_skim_loss = tr_skim_loss
-                    for layer_idx in range(num_hidden_layers):
-                        tb_writer.add_scalar(f"layer_{layer_idx}_loss", (tr_layer_loss[layer_idx] - logging_layer_loss[layer_idx]) / args.logging_steps, global_step)
-                        logging_layer_loss[layer_idx] = tr_layer_loss[layer_idx]
+                    if not args.actual_skim:
+                        for layer_idx in range(num_hidden_layers):
+                            tb_writer.add_scalar(f"layer_{layer_idx}_loss", (tr_layer_loss[layer_idx] - logging_layer_loss[layer_idx]) / args.logging_steps, global_step)
+                            logging_layer_loss[layer_idx] = tr_layer_loss[layer_idx]
 
                 # Save model checkpoint
                 if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
@@ -375,11 +402,11 @@ def evaluate(args, model, tokenizer, prefix=""):
                     new_final_skim_mask[final_skim_mask] = skim_mask_tuple[1].view(-1)
                     final_skim_mask = new_final_skim_mask
 
-                    # new_start_logits[final_skim_mask] = outputs.start_logits[layer_idx].view(-1)
-                    # new_end_logits[final_skim_mask] = outputs.end_logits[layer_idx].view(-1)
+                    new_start_logits[final_skim_mask] = outputs.start_logits[layer_idx].view(-1)
+                    new_end_logits[final_skim_mask] = outputs.end_logits[layer_idx].view(-1)
 
-                new_start_logits[final_skim_mask] = outputs.start_logits[-1].view(-1)
-                new_end_logits[final_skim_mask] = outputs.end_logits[-1].view(-1)
+                # new_start_logits[final_skim_mask] = outputs.start_logits[-1].view(-1)
+                # new_end_logits[final_skim_mask] = outputs.end_logits[-1].view(-1)
 
                 outputs.start_logits = new_start_logits
                 outputs.end_logits = new_end_logits
@@ -576,7 +603,7 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
         input_dir,
         "cached_{}_{}_{}".format(
             "dev" if evaluate else "train",
-            list(filter(None, args.model_name_or_path.split("/"))).pop(),
+            list(filter(None, args.cache_name.split("/"))).pop() if args.cache_name else list(filter(None, args.model_name_or_path.split("/"))).pop(),
             str(args.max_seq_length),
         ),
     )
@@ -829,7 +856,7 @@ def main():
     parser.add_argument("--block_size", type=int, default=32, help="block size for block skim module")
     parser.add_argument("--skim_factor", default=0.0001, type=float, help="factor for skim predictor")
     parser.add_argument("--balance_factor", default=1, type=float, help="factor for skim predictor")
-
+    parser.add_argument("--cache_name", type=str, help="cached feature dir")
 
     args = parser.parse_args()
 
