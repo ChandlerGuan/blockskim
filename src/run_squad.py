@@ -380,9 +380,11 @@ def evaluate(args, model, tokenizer, prefix=""):
             if args.actual_skim:
                 new_start_logits = torch.ones(batch[0].shape).to(args.device)*-100
                 new_end_logits = torch.ones(batch[0].shape).to(args.device)*-100
-                final_skim_mask = torch.ones_like(outputs.all_skim_mask[0][1],dtype=torch.bool)
+                final_skim_mask = torch.ones_like(batch[0],dtype=torch.bool)
 
                 for layer_idx, skim_mask_tuple in enumerate(outputs.all_skim_mask):
+                    if skim_mask_tuple[1]==None:
+                        continue
                     new_final_skim_mask = final_skim_mask.clone()
                     new_final_skim_mask[final_skim_mask] = skim_mask_tuple[1].view(-1)
                     final_skim_mask = new_final_skim_mask
@@ -403,10 +405,12 @@ def evaluate(args, model, tokenizer, prefix=""):
             if args.block_skim:
                 skim_label = compute_skim_mask(batch[-1][i], args.max_seq_length//args.block_size, args.block_size)
                 for layer_idx, skim_mask in enumerate(all_layer_skim_mask):
+                    if outputs.all_skim_mask[layer_idx][0]==None:
+                        continue
                     skim_mask.extend(to_list(torch.argmax(outputs.all_skim_mask[layer_idx][0][i],axis=-1)))
                 all_skim_label.extend(to_list(skim_label))
                 
-                assert len(all_skim_label) == len(all_layer_skim_mask[0])
+                # assert len(all_skim_label) == len(all_layer_skim_mask[0])
 
             # Some models (XLNet, XLM) use 5 arguments for their predictions, while the other "simpler"
             # models only use two.
@@ -438,6 +442,8 @@ def evaluate(args, model, tokenizer, prefix=""):
     if args.block_skim and not args.actual_skim:
         from sklearn.metrics import classification_report
         for layer_idx in range(len(all_layer_skim_mask)):
+            if args.augment_layers and layer_idx not in args.augment_layers:
+                continue
             print(f'evaluating skim predictor of layer {layer_idx}')
             print(classification_report(all_skim_label, all_layer_skim_mask[layer_idx]))
 
@@ -757,6 +763,7 @@ def main():
     parser.add_argument("--skim_factor", default=0.0001, type=float, help="factor for skim predictor")
     parser.add_argument("--balance_factor", default=1, type=float, help="factor for skim predictor")
     parser.add_argument("--cache_name", type=str, help="cached feature dir")
+    parser.add_argument("--augment_layers", type=int, nargs="+", help="layers to augment blockskim module")
 
     args = parser.parse_args()
 
@@ -842,6 +849,7 @@ def main():
             if args.actual_skim:
                 config.actual_skim = True
             config.block_size = args.block_size
+            config.augment_layers = args.augment_layers if args.augment_layers else list(range(config.num_hidden_layers))
             model = BertForQuestionAnsweringWithSkim.from_pretrained(
                 args.model_name_or_path,
                 from_tf=bool(".ckpt" in args.model_name_or_path),

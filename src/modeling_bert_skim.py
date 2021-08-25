@@ -433,7 +433,7 @@ class BertSelfAttention(nn.Module):
         # chandler
         # skim_mask predicted by block skim module
         # skim_mask: [batch_size, max_seq_length/block_size]
-        skim_mask = self.skim_predictor(attention_probs)
+        skim_mask = self.skim_predictor(attention_probs) if self.augment_predictor else None
 
         # Mask heads if we want to
         if head_mask is not None:
@@ -638,6 +638,12 @@ class BertEncoder(nn.Module):
 
         self.actual_skim = config.actual_skim if hasattr(config, 'actual_skim') else False
 
+        for layer_idx, layer_module in enumerate(self.layer):
+            if layer_idx in config.augment_layers:
+                layer_module.attention.self.augment_predictor = True
+            else:
+                layer_module.attention.self.augment_predictor = False
+
     def forward(
         self,
         hidden_states,
@@ -709,9 +715,12 @@ class BertEncoder(nn.Module):
             # preform actual skim of input dim reduction with predicted mask
             if self.actual_skim:
                 skim_mask = layer_outputs[-1]
-                skim_mask_prediction = compute_skim_prediction_aligned(skim_mask, 32)
-                hidden_states = trunc_with_mask_batched(hidden_states, skim_mask_prediction, dim=1)
-                attention_mask = trunc_with_mask_batched(attention_mask, skim_mask_prediction, dim=3)
+                if not skim_mask == None:
+                    skim_mask_prediction = compute_skim_prediction_aligned(skim_mask, 32)
+                    hidden_states = trunc_with_mask_batched(hidden_states, skim_mask_prediction, dim=1)
+                    attention_mask = trunc_with_mask_batched(attention_mask, skim_mask_prediction, dim=3)
+                else:
+                    skim_mask_prediction = None
 
             all_skim_mask.append((layer_outputs[-1], skim_mask_prediction,) if self.actual_skim else (layer_outputs[-1],))
 
