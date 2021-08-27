@@ -36,15 +36,15 @@ mkdir -p ${OUTPUT_DIR}
 
 CUDA_LAUNCH_BLOCKING=1 python src/run_squad.py \
   --model_type bert \
-  --block_skim \
   --actual_skim \
+  --augment_layers 0 6 10 \
   --model_name_or_path ${EVAL_CKPT_DIR} \
   --cache_name bert-base-uncased \
   --do_lower_case \
   --do_eval \
   --predict_file dev-v1.1.json \
   --data_dir ${DATA_DIR} \
-  --per_gpu_eval_batch_size=16 \
+  --per_gpu_eval_batch_size=256 \
   --max_seq_length 512 \
   --doc_stride 128 \
   --overwrite_output_dir \

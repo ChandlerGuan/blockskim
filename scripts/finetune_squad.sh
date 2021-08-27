@@ -1,15 +1,16 @@
 DATA_DIR=datasets/squad
 
 
-BALANCE_FACTOR=100
+BALANCE_FACTOR=1000
 SKIM_FACTOR=0.001
 
-# for BALANCE_FACTOR in 10 20  100
+# for BALANCE_FACTOR in 10 100 200
 # do
-# for SKIM_FACTOR in 1 0.1 0.01 0.001
+# for SKIM_FACTOR in 0.1 0.01 0.001
 # do
 
-OUTPUT_DIR=model/block_skim/skim_training/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
+# OUTPUT_DIR=model/block_skim/bert_large_wwm/baseline
+OUTPUT_DIR=model/block_skim/bert_large_wwm/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
 
 if [ -d "$OUTPUT_DIR" ]; then
   OUTPUT_DIR=${OUTPUT_DIR}_$(date +"%m-%d-%H-%M")
@@ -44,11 +45,9 @@ mkdir -p ${OUTPUT_DIR}
 python src/run_squad.py \
   --model_type bert \
   --block_skim \
-  --actual_skim \
   --skim_factor ${SKIM_FACTOR} \
   --balance_factor ${BALANCE_FACTOR} \
-  --model_name_or_path model/block_skim/skim_0.01_balance_100/ \
-  --cache_name bert-base-uncased \
+  --model_name_or_path bert-large-uncased-whole-word-masking \
   --do_lower_case \
   --do_train \
   --do_eval \
@@ -58,7 +57,7 @@ python src/run_squad.py \
   --per_gpu_train_batch_size 12 \
   --per_gpu_eval_batch_size=16 \
   --learning_rate 3e-5 \
-  --num_train_epochs 1.0 \
+  --num_train_epochs 2.0 \
   --max_seq_length 512 \
   --doc_stride 128 \
   --save_steps 10000 \
