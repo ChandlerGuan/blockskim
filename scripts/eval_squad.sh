@@ -1,7 +1,9 @@
 OUTPUT_DIR=model/tmp/eval/debug
 DATA_DIR=datasets/squad
 
-EVAL_CKPT_DIR=model/block_skim/skim_0.001_balance_100/
+# EVAL_CKPT_DIR=model/block_skim/skim_0.001_balance_100/
+EVAL_CKPT_DIR=model/prune_diagonal_attn/baseline
+
 
 
 # if [ -d "$OUTPUT_DIR" ]; then

@@ -420,8 +420,9 @@ def evaluate(args, model, tokenizer, prefix=""):
 
             all_results.append(result)
 
-    import IPython
-    IPython.embed()
+    save_path = "tmp/prof_attn/baseline"
+    np.save(f"{save_path}_ans", all_ans_attn)
+    np.save(f"{save_path}_junk", all_junk_attn)
 
     evalTime = timeit.default_timer() - start_time
     logger.info("  Evaluation done in total %f secs (%f sec per example)", evalTime, evalTime / len(dataset))

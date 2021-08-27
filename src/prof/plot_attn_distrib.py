@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 import os
 
 def main():
-    junk = np.load('tmp/prof_attn/junk.npy')
-    ans = np.load('tmp/prof_attn/ans.npy')
+    junk = np.load('tmp/prof_attn/baseline_junk.npy')
+    ans = np.load('tmp/prof_attn/baseline_ans.npy')
 
     # layer_idx = 10
     for layer_idx in range(12):
