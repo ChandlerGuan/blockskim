@@ -377,7 +377,7 @@ def evaluate(args, model, tokenizer, prefix=""):
             outputs = model(**inputs)
 
 
-            if args.actual_skim:
+            if args.block_skim and args.actual_skim:
                 new_start_logits = torch.ones(batch[0].shape).to(args.device)*-100
                 new_end_logits = torch.ones(batch[0].shape).to(args.device)*-100
                 final_skim_mask = torch.ones_like(batch[0],dtype=torch.bool)
