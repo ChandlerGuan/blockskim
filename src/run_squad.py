@@ -62,6 +62,8 @@ from modeling_bert_skim import BertForQuestionAnswering as BertForQuestionAnswer
 from modeling_blockskim import compute_skim_mask
 from squad.transformer_squad_processor import SquadV1Processor, SquadV2Processor
 
+from torchprofile import profile_macs
+
 MODEL_CONFIG_CLASSES = list(MODEL_FOR_QUESTION_ANSWERING_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
 
@@ -374,6 +376,7 @@ def evaluate(args, model, tokenizer, prefix=""):
                     inputs.update(
                         {"langs": (torch.ones(batch[0].shape, dtype=torch.int64) * args.lang_id).to(args.device)}
                     )
+            print(profile_macs(model, args=(batch[0], batch[1], batch[2])))
             outputs = model(**inputs)
 
 
