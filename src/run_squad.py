@@ -216,9 +216,16 @@ def train(args, train_dataset, model, tokenizer):
                 if args.actual_skim:
                     new_start_logits = torch.ones(batch[0].shape).to(args.device)*-100
                     new_end_logits = torch.ones(batch[0].shape).to(args.device)*-100
-                    final_skim_mask = torch.ones_like(outputs.all_skim_mask[0][1],dtype=torch.bool)
+                    final_skim_mask = torch.ones_like(batch[0],dtype=torch.bool)
+                    skim_loss = 0
+                    answer_mask = batch[-1]
+                    skim_label = compute_skim_mask(answer_mask, args.max_seq_length//args.block_size, args.block_size)
 
                     for layer_idx, skim_mask_tuple in enumerate(outputs.all_skim_mask):
+                        if args.augment_layers and layer_idx not in args.augment_layers:
+                            continue
+                        label_skim_mask = compute_skim_mask(final_skim_mask, args.max_seq_length//args.block_size, args.block_size)
+                        skim_loss += torch.nn.functional.cross_entropy(skim_mask_tuple[0].view(-1,2), skim_label[label_skim_mask.to(dtype=torch.bool)].view(-1), weight=balance_weight)
                         new_final_skim_mask = final_skim_mask.clone()
                         new_final_skim_mask[final_skim_mask] = skim_mask_tuple[1].view(-1)
                         final_skim_mask = new_final_skim_mask
@@ -230,7 +237,8 @@ def train(args, train_dataset, model, tokenizer):
                     end_loss = loss_fct(new_end_logits, batch[4])
                     qa_loss = (start_loss + end_loss) / 2
                     skim_loss = qa_loss
-                    loss = qa_loss
+                    # loss = qa_loss
+                    loss = args.skim_factor * skim_loss + qa_loss
                 else:
                     qa_loss = outputs[0]
                     answer_mask = batch[-1]
