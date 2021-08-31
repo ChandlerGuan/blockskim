@@ -1,7 +1,7 @@
 OUTPUT_DIR=model/tmp/eval/debug
 DATA_DIR=datasets/squad
 
-EVAL_CKPT_DIR=model/block_skim/skim_0.001_balance_100/
+EVAL_CKPT_DIR=model/block_skim/skim_0.1_balance_20/
 
 
 # if [ -d "$OUTPUT_DIR" ]; then
@@ -34,10 +34,11 @@ mkdir -p ${OUTPUT_DIR}
 #   --overwrite_output_dir \
 #   --output_dir ${OUTPUT_DIR} 2>&1 | tee ${OUTPUT_DIR}/log_finetune.log
 
-CUDA_LAUNCH_BLOCKING=1 python src/run_squad.py \
+python -u src/run_squad.py \
   --model_type bert \
+  --block_skim \
   --actual_skim \
-  --augment_layers 0 6 10 \
+  --skim_threshold 0.01 \
   --model_name_or_path ${EVAL_CKPT_DIR} \
   --cache_name bert-base-uncased \
   --do_lower_case \

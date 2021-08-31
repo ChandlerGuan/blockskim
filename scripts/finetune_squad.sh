@@ -4,10 +4,10 @@ DATA_DIR=datasets/squad
 BALANCE_FACTOR=100
 SKIM_FACTOR=0.001
 
-# for BALANCE_FACTOR in 10 100 200
-# do
-# for SKIM_FACTOR in 0.1 0.01 0.001
-# do
+for BALANCE_FACTOR in 20 100
+do
+for SKIM_FACTOR in 100 10
+do
 
 # OUTPUT_DIR=model/block_skim/bert_large_wwm/baseline
 # OUTPUT_DIR=model/block_skim/bert_large_wwm/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
