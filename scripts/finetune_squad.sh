@@ -1,13 +1,13 @@
 DATA_DIR=datasets/squad
 
 
-BALANCE_FACTOR=100
-SKIM_FACTOR=0.001
+BALANCE_FACTOR=10
+SKIM_FACTOR=0.01
 
-for BALANCE_FACTOR in 20 100
-do
-for SKIM_FACTOR in 100 10
-do
+# for BALANCE_FACTOR in 20 100
+# do
+# for SKIM_FACTOR in 100 10
+# do
 
 # OUTPUT_DIR=model/block_skim/bert_large_wwm/baseline
 # OUTPUT_DIR=model/block_skim/bert_large_wwm/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
@@ -48,10 +48,10 @@ python src/run_squad.py \
   --model_type bert \
   --block_skim \
   --actual_skim \
-  --augment_layer 8 \
+  --skim_threshold 0.01 \
   --skim_factor ${SKIM_FACTOR} \
   --balance_factor ${BALANCE_FACTOR} \
-  --model_name_or_path model/block_skim/skim_0.001_balance_100/ \
+  --model_name_or_path model/block_skim/skim_0.1_balance_10 \
   --cache_name bert-base-uncased \
   --do_lower_case \
   --do_train \
@@ -62,7 +62,7 @@ python src/run_squad.py \
   --per_gpu_train_batch_size 12 \
   --per_gpu_eval_batch_size=16 \
   --learning_rate 3e-5 \
-  --num_train_epochs 2.0 \
+  --num_train_epochs 1.0 \
   --max_seq_length 512 \
   --doc_stride 128 \
   --save_steps 10000 \

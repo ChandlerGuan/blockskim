@@ -232,13 +232,21 @@ def train(args, train_dataset, model, tokenizer):
 
                     new_start_logits[final_skim_mask] = outputs[1].view(-1)
                     new_end_logits[final_skim_mask] = outputs[2].view(-1)
-                    loss_fct = torch.nn.CrossEntropyLoss()
-                    start_loss = loss_fct(new_start_logits, batch[3])
-                    end_loss = loss_fct(new_end_logits, batch[4])
-                    qa_loss = (start_loss + end_loss) / 2
-                    skim_loss = qa_loss
-                    # loss = qa_loss
-                    loss = args.skim_factor * skim_loss + qa_loss
+                    # loss_fct = torch.nn.CrossEntropyLoss()
+
+                    qa_loss = 0
+
+                    for batch_idx in range(batch[3].shape[0]):
+                        batch_start_loss = torch.nn.functional.cross_entropy(new_start_logits[batch_idx].view(1,-1), batch[3][batch_idx].view(-1), weight=final_skim_mask[batch_idx].to(dtype=torch.float32))
+                        batch_end_loss = torch.nn.functional.cross_entropy(new_end_logits[batch_idx].view(1,-1), batch[4][batch_idx].view(-1), weight=final_skim_mask[batch_idx].to(dtype=torch.float32))
+                        qa_loss += (batch_start_loss + batch_end_loss) / 2
+
+                    # start_loss = loss_fct(new_start_logits, batch[3])
+                    # end_loss = loss_fct(new_end_logits, batch[4])
+                    # qa_loss = (start_loss + end_loss) / 2
+                    # skim_loss = qa_loss
+                    loss = qa_loss
+                    # loss = args.skim_factor * skim_loss + qa_loss
                 else:
                     qa_loss = outputs[0]
                     answer_mask = batch[-1]
