@@ -352,6 +352,10 @@ def evaluate(args, model, tokenizer, prefix=""):
         all_skim_label = []
     start_time = timeit.default_timer()
 
+    total_flops = 0
+    total_samples = 0
+    total_time = 0
+
     for batch in tqdm(eval_dataloader, desc="Evaluating"):
         model.eval()
         batch = tuple(t.to(args.device) for t in batch)
@@ -376,9 +380,15 @@ def evaluate(args, model, tokenizer, prefix=""):
                     inputs.update(
                         {"langs": (torch.ones(batch[0].shape, dtype=torch.int64) * args.lang_id).to(args.device)}
                     )
-            print(profile_macs(model, args=(batch[0], batch[1], batch[2])))
-            outputs = model(**inputs)
 
+            total_flops += profile_macs(model, args=(batch[0], batch[1], batch[2]))
+
+            import time
+            before_time = time.time()
+            outputs = model(**inputs)
+            total_time += time.time() - before_time
+
+            total_samples += batch[0].shape[0]
 
             if args.block_skim and args.actual_skim:
                 new_start_logits = torch.ones(batch[0].shape).to(args.device)*-100
@@ -397,6 +407,15 @@ def evaluate(args, model, tokenizer, prefix=""):
 
                 outputs.start_logits = new_start_logits
                 outputs.end_logits = new_end_logits
+            
+            if args.args.eval_batch_size==1 and total_samples>=100 :
+                output_dir = 'tmp/flops_eval/'
+                if not os.path.exists(output_dir):
+                    os.makedirs(output_dir)
+                with open(os.path.join(output_dir, f"first100_{os.path.basename(os.path.normpath(args.model_name_or_path))}.txt"),'a') as output_file:
+                    output_file.write(f"{args}\n")
+                    output_file.write(f"{total_flops/total_samples/1e9}\t{total_time}\n\n")
+                exit()
 
 
         for i, feature_index in enumerate(feature_indices):
@@ -498,6 +517,15 @@ def evaluate(args, model, tokenizer, prefix=""):
 
     # Compute the F1 and exact scores.
     results = squad_evaluate(examples, predictions)
+
+    output_dir = 'tmp/flops_eval/'
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    with open(os.path.join(output_dir, f"{os.path.basename(os.path.normpath(args.model_name_or_path))}.txt"),'a') as output_file:
+        output_file.write(f"{args}\n")
+        output_file.write(f"{results}\n")
+        output_file.write(f"{total_flops/total_samples/1e9}\t{total_time}\n\n")
+
     return results
 
 
