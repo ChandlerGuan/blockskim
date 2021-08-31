@@ -361,11 +361,21 @@ def evaluate(args, model, tokenizer, prefix=""):
         batch = tuple(t.to(args.device) for t in batch)
 
         with torch.no_grad():
+            if args.eval_batch_size == 1:
+                block_attention_mask = compute_skim_mask(batch[1], args.max_seq_length//args.block_size, args.block_size)
+                block_attention_mask = block_attention_mask.view(1,-1,1).repeat(1,1,args.block_size).view(1,-1).to(dtype=torch.bool)
+                batch = list(batch)
+                batch[0] = batch[0][block_attention_mask].view(1, -1)
+                batch[1] = batch[1][block_attention_mask].view(1, -1)
+                batch[2] = batch[2][block_attention_mask].view(1, -1)
+
             inputs = {
                 "input_ids": batch[0],
                 "attention_mask": batch[1],
                 "token_type_ids": batch[2],
             }
+
+
 
             if args.model_type in ["xlm", "roberta", "distilbert", "camembert", "bart", "longformer"]:
                 del inputs["token_type_ids"]
@@ -408,7 +418,7 @@ def evaluate(args, model, tokenizer, prefix=""):
                 outputs.start_logits = new_start_logits
                 outputs.end_logits = new_end_logits
             
-            if args.args.eval_batch_size==1 and total_samples>=100 :
+            if args.eval_batch_size==1 and total_samples>=100 :
                 output_dir = 'tmp/flops_eval/'
                 if not os.path.exists(output_dir):
                     os.makedirs(output_dir)

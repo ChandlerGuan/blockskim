@@ -38,7 +38,8 @@ python -u src/run_squad.py \
   --model_type bert \
   --block_skim \
   --actual_skim \
-  --skim_threshold 0.5 \
+  --augment_layer 0 6 \
+  --skim_threshold 0.1 \
   --per_gpu_eval_batch_size=1 \
   --model_name_or_path ${EVAL_CKPT_DIR} \
   --cache_name bert-base-uncased \
