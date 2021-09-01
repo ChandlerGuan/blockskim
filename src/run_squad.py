@@ -418,7 +418,7 @@ def evaluate(args, model, tokenizer, prefix=""):
                 outputs.start_logits = new_start_logits
                 outputs.end_logits = new_end_logits
             
-            if args.eval_batch_size==1 and total_samples>=100 :
+            if (args.eval_batch_size==1 or args.fast_eval!=0) and total_samples>=args.fast_eval :
                 output_dir = 'tmp/flops_eval/'
                 if not os.path.exists(output_dir):
                     os.makedirs(output_dir)
@@ -806,6 +806,7 @@ def main():
     parser.add_argument("--cache_name", type=str, help="cached feature dir")
     parser.add_argument("--augment_layers", type=int, nargs="+", help="layers to augment blockskim module")
     parser.add_argument("--skim_threshold", type=float, default=0.5, help="threshold for skim predictor")
+    parser.add_argument("--fast_eval", type=int, default=0, help="epochs for fast flops evaluation")
 
     args = parser.parse_args()
 

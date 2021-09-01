@@ -37,10 +37,9 @@ mkdir -p ${OUTPUT_DIR}
 python -u src/run_squad.py \
   --model_type bert \
   --block_skim \
-  --actual_skim \
-  --augment_layer 0 6 \
-  --skim_threshold 0.1 \
-  --per_gpu_eval_batch_size=1 \
+  --skim_threshold 0.01 \
+  --per_gpu_eval_batch_size=8 \
+  --fast_eval 100 \
   --model_name_or_path ${EVAL_CKPT_DIR} \
   --cache_name bert-base-uncased \
   --do_lower_case \
