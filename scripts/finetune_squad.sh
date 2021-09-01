@@ -1,16 +1,18 @@
 DATA_DIR=datasets/hotpotqa
 
 
-BALANCE_FACTOR=100
-SKIM_FACTOR=0.001
+BALANCE_FACTOR=20
+SKIM_FACTOR=0.1
 
-# for BALANCE_FACTOR in 100
+SEED=42
+
+# for BALANCE_FACTOR in 100 20
 # do
-# for SKIM_FACTOR in 0.1 0.01 0.001
+# for SKIM_FACTOR in 10 1 0.1 0.01 0.001
 # do
 
 # OUTPUT_DIR=model/hotpotqa/baseline/
-OUTPUT_DIR=model/hotpotqa/block_skim_evid/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
+OUTPUT_DIR=model/hotpotqa/block_skim_evid/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}_seed_${SEED}
 
 if [ -d "$OUTPUT_DIR" ]; then
   OUTPUT_DIR=${OUTPUT_DIR}_$(date +"%m-%d-%H-%M")
@@ -47,6 +49,7 @@ python src/run_squad.py \
   --block_skim \
   --skim_factor ${SKIM_FACTOR} \
   --balance_factor ${BALANCE_FACTOR} \
+  --seed ${SEED} \
   --evidence_factor 1 \
   --model_name_or_path bert-base-uncased \
   --do_lower_case \
@@ -65,5 +68,5 @@ python src/run_squad.py \
   --overwrite_output_dir \
   --output_dir ${OUTPUT_DIR} 2>&1 | tee ${OUTPUT_DIR}/log_finetune.log
 
-# done
-# done
+done
+done

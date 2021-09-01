@@ -59,7 +59,7 @@ class BlockSkim(nn.Module):
         # out = self.conv3(out).squeeze(dim=1)
         out = torch.flatten(out,start_dim=1)
         # out = self.fc(out).view(-1, self.block_num, 1).squeeze(dim=-1)
-        out = self.fc(out).view(-1, block_num, 2)
+        out = self.fc(out).view(-1, block_num, 3)
         return out
 
 """
