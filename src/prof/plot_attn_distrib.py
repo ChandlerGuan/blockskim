@@ -6,6 +6,9 @@ def main():
     junk = np.load('tmp/prof_attn/baseline_junk.npy')
     ans = np.load('tmp/prof_attn/baseline_ans.npy')
 
+    plt.rc('font', family='serif')
+    plt.style.use('ggplot')
+
     # layer_idx = 10
     for layer_idx in range(12):
 
@@ -32,18 +35,18 @@ def main():
         bplot1 = ax1.boxplot(layer_junk,
                             vert=True,  # vertical box alignment
                             patch_artist=True,
-                            showfliers=False)  # will be used to label x-ticks
+                            showfliers=False, whis=0)  # will be used to label x-ticks
         # ax1.set_title('irrelevant tokens')
 
         # notch shape box plot
         bplot2 = ax2.boxplot(layer_ans,
                             vert=True,  # vertical box alignment
                             patch_artist=True,
-                            showfliers=False)  # will be used to label x-ticks
+                            showfliers=False, whis=0)  # will be used to label x-ticks
         # ax2.set_title('ans tokens')
 
         # fill with colors
-        colors = ['pink', 'lightblue', 'lightgreen']
+        colors = ['pink', 'lightblue', 'lightgreen', 'lightsalmon', 'lightyellow', 'lightcyan','pink', 'lightblue', 'lightgreen', 'lightsalmon', 'lightyellow', 'lightcyan']
         for bplot in (bplot1, bplot2):
             for patch, color in zip(bplot['boxes'], colors):
                 patch.set_facecolor(color)
