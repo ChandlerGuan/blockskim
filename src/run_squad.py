@@ -238,7 +238,8 @@ def train(args, train_dataset, model, tokenizer):
                     # blocked_answer_mask = answer_mask.view((-1, model.config.max_seq_length//model.config.block_size, model.config.block_size))
                     # skim_label = (torch.sum(blocked_answer_mask, dim=-1)>1).to(dtype=torch.long)
                     skim_label = compute_skim_mask(answer_mask, args.max_seq_length//args.block_size, args.block_size)
-                    all_skim_loss = [torch.nn.functional.cross_entropy(skim_mask.view(-1,2), skim_label.view(-1), weight=balance_weight) for skim_mask in all_skim_mask]
+                    padding_mask = compute_skim_mask(batch[1], args.max_seq_length//args.block_size, args.block_size).to(dtype=torch.bool)
+                    all_skim_loss = [torch.nn.functional.cross_entropy(skim_mask[padding_mask].view(-1,2), skim_label[padding_mask].view(-1), weight=balance_weight) for skim_mask in all_skim_mask]
                     skim_loss = sum(all_skim_loss)
 
                     loss = args.skim_factor * skim_loss + qa_loss
@@ -404,11 +405,12 @@ def evaluate(args, model, tokenizer, prefix=""):
 
             if args.block_skim:
                 skim_label = compute_skim_mask(batch[-1][i], args.max_seq_length//args.block_size, args.block_size)
+                padding_mask = compute_skim_mask(batch[1][i], args.max_seq_length//args.block_size, args.block_size)
                 for layer_idx, skim_mask in enumerate(all_layer_skim_mask):
                     if outputs.all_skim_mask[layer_idx][0]==None:
                         continue
-                    skim_mask.extend(to_list(torch.argmax(outputs.all_skim_mask[layer_idx][0][i],axis=-1)))
-                all_skim_label.extend(to_list(skim_label))
+                    skim_mask.extend(to_list(torch.argmax(outputs.all_skim_mask[layer_idx][0][i],axis=-1)[padding_mask]))
+                all_skim_label.extend(to_list(skim_label[padding_mask]))
                 
                 # assert len(all_skim_label) == len(all_layer_skim_mask[0])
 
