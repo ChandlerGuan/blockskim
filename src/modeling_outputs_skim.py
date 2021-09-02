@@ -4,8 +4,27 @@ from typing import Optional, Tuple
 import torch
 from transformers.modeling_outputs import (
     BaseModelOutputWithPastAndCrossAttentions,
-    BaseModelOutputWithPoolingAndCrossAttentions, QuestionAnsweringModelOutput)
+    BaseModelOutputWithPoolingAndCrossAttentions, 
+    QuestionAnsweringModelOutput,
+    BaseModelOutput,
+    BaseModelOutputWithPooling,
+)
 
+@dataclass
+class BaseModelOutputWithSkim(BaseModelOutput):
+    last_hidden_state: torch.FloatTensor = None
+    hidden_states: Optional[Tuple[torch.FloatTensor]] = None
+    attentions: Optional[Tuple[torch.FloatTensor]] = None
+    all_skim_mask: Optional[Tuple[torch.FloatTensor]] = None
+
+
+@dataclass
+class BaseModelOutputWithPoolingWithSkim(BaseModelOutputWithPooling):
+    last_hidden_state: torch.FloatTensor = None
+    pooler_output: torch.FloatTensor = None
+    hidden_states: Optional[Tuple[torch.FloatTensor]] = None
+    attentions: Optional[Tuple[torch.FloatTensor]] = None
+    all_skim_mask: Optional[Tuple[torch.FloatTensor]] = None
 
 @dataclass
 class BaseModelOutputWithPastAndCrossAttentionsWithSkim(BaseModelOutputWithPastAndCrossAttentions):

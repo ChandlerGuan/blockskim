@@ -24,15 +24,15 @@ from packaging import version
 from torch import nn
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 
-from ...activations import ACT2FN
-from ...file_utils import (
+from transformers.activations import ACT2FN
+from transformers.file_utils import (
     ModelOutput,
     add_code_sample_docstrings,
     add_start_docstrings,
     add_start_docstrings_to_model_forward,
     replace_return_docstrings,
 )
-from ...modeling_outputs import (
+from transformers.modeling_outputs import (
     BaseModelOutput,
     BaseModelOutputWithPooling,
     MaskedLMOutput,
@@ -41,15 +41,22 @@ from ...modeling_outputs import (
     SequenceClassifierOutput,
     TokenClassifierOutput,
 )
-from ...modeling_utils import (
+from transformers.modeling_utils import (
     PreTrainedModel,
     apply_chunking_to_forward,
     find_pruneable_heads_and_indices,
     prune_linear_layer,
 )
-from ...utils import logging
-from .configuration_albert import AlbertConfig
+from transformers.utils import logging
+from transformers.models.albert.configuration_albert import AlbertConfig
 
+from modeling_blockskim import BlockSkim
+from modeling_outputs_skim import (
+    BaseModelOutputWithSkim,
+    QuestionAnsweringModelOutputWithSkim,
+    BaseModelOutputWithPoolingWithSkim,
+)
+from utils_skim import compute_skim_prediction_aligned, trunc_with_mask_batched
 
 logger = logging.get_logger(__name__)
 
@@ -442,6 +449,11 @@ class AlbertTransformer(nn.Module):
         self.embedding_hidden_mapping_in = nn.Linear(config.embedding_size, config.hidden_size)
         self.albert_layer_groups = nn.ModuleList([AlbertLayerGroup(config) for _ in range(config.num_hidden_groups)])
 
+        self.actual_skim = config.actual_skim if hasattr(config, 'actual_skim') else False
+        self.skim_threshold = config.skim_threshold
+
+        self.skim_predictors = nn.ModuleList([BlockSkim(config) for _ in range(config.num_hidden_layers)])
+
     def forward(
         self,
         hidden_states,
@@ -455,6 +467,7 @@ class AlbertTransformer(nn.Module):
 
         all_hidden_states = (hidden_states,) if output_hidden_states else None
         all_attentions = () if output_attentions else None
+        all_skim_masks = list()
 
         head_mask = [None] * self.config.num_hidden_layers if head_mask is None else head_mask
 
@@ -474,6 +487,22 @@ class AlbertTransformer(nn.Module):
             )
             hidden_states = layer_group_output[0]
 
+            if i in self.config.augment_layers:
+                skim_mask = self.skim_predictors[i](layer_group_output[-1][0])
+            else:
+                skim_mask = None
+                
+            # preform actual skim of input dim reduction with predicted mask
+            if self.actual_skim:
+                if not skim_mask == None:
+                    skim_mask_prediction = compute_skim_prediction_aligned(skim_mask, 32, thold=self.skim_threshold)
+                    hidden_states = trunc_with_mask_batched(hidden_states, skim_mask_prediction, dim=1)
+                    attention_mask = trunc_with_mask_batched(attention_mask, skim_mask_prediction, dim=3)
+                else:
+                    skim_mask_prediction = None
+
+            all_skim_masks.append((skim_mask, skim_mask_prediction,) if self.actual_skim else (skim_mask,))
+
             if output_attentions:
                 all_attentions = all_attentions + layer_group_output[-1]
 
@@ -481,9 +510,9 @@ class AlbertTransformer(nn.Module):
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
         if not return_dict:
-            return tuple(v for v in [hidden_states, all_hidden_states, all_attentions] if v is not None)
-        return BaseModelOutput(
-            last_hidden_state=hidden_states, hidden_states=all_hidden_states, attentions=all_attentions
+            return tuple(v for v in [hidden_states, all_hidden_states, all_attentions, all_skim_masks] if v is not None)
+        return BaseModelOutputWithSkim(
+            last_hidden_state=hidden_states, hidden_states=all_hidden_states, attentions=all_attentions, all_skim_mask=all_skim_masks,
         )
 
 
@@ -735,11 +764,12 @@ class AlbertModel(AlbertPreTrainedModel):
         if not return_dict:
             return (sequence_output, pooled_output) + encoder_outputs[1:]
 
-        return BaseModelOutputWithPooling(
+        return BaseModelOutputWithPoolingWithSkim(
             last_hidden_state=sequence_output,
             pooler_output=pooled_output,
             hidden_states=encoder_outputs.hidden_states,
             attentions=encoder_outputs.attentions,
+            all_skim_mask=encoder_outputs.all_skim_mask,
         )
 
 
@@ -1254,12 +1284,13 @@ class AlbertForQuestionAnswering(AlbertPreTrainedModel):
             output = (start_logits, end_logits) + outputs[2:]
             return ((total_loss,) + output) if total_loss is not None else output
 
-        return QuestionAnsweringModelOutput(
+        return QuestionAnsweringModelOutputWithSkim(
             loss=total_loss,
             start_logits=start_logits,
             end_logits=end_logits,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
+            all_skim_mask=outputs.all_skim_mask,
         )
 
 
@@ -1351,3 +1382,23 @@ class AlbertForMultipleChoice(AlbertPreTrainedModel):
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
+
+def test_AlBertForQuestionAnswering():
+    config = AlbertConfig.from_pretrained('albert-base-v2')
+    config.max_seq_length = 512
+    config.block_size = 32
+    config.actual_skim = True
+    config.skim_threshold = 0.5
+    config.augment_layers = list(range(config.num_hidden_layers))
+    config.output_attentions = True
+
+    bert = AlbertForQuestionAnswering(config)
+
+    hidden_states = torch.randint(0,15,(2, config.max_seq_length))
+
+    y = bert(hidden_states,return_dict=True)
+
+    print(y.start_logits.shape)
+
+if __name__ == "__main__":
+    test_AlBertForQuestionAnswering()
