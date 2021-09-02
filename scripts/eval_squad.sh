@@ -1,7 +1,7 @@
-OUTPUT_DIR=model/tmp/eval/debug
-DATA_DIR=datasets/hotpotqa
+OUTPUT_DIR=/home/yguan/blockskim/model/tmp/eval/debug
+DATA_DIR=/home/yguan/blockskim/datasets/hotpotqa
 
-EVAL_CKPT_DIR=model/hotpotqa/block_skim/skim_0.01_balance_100_08-11-13-44/
+EVAL_CKPT_DIR=/home/yguan/blockskim/model/hotpotqa/block_skim_new/skim_0.1_balance_20_seed_42_09-02-11-01
 
 
 # if [ -d "$OUTPUT_DIR" ]; then
@@ -36,8 +36,10 @@ mkdir -p ${OUTPUT_DIR}
 
 python -u src/run_squad.py \
   --model_type bert \
+  --actual_skim \
+  --block_skim \
+  --skim_threshold 0.1 \
   --model_name_or_path ${EVAL_CKPT_DIR} \
-  --cache_name bert-base-uncased \
   --do_lower_case \
   --do_eval \
   --block_skim \
