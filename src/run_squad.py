@@ -862,7 +862,7 @@ def main():
                 config=config,
                 cache_dir=args.cache_dir if args.cache_dir else None,
             )
-        elif:
+        elif args.model_type == 'albert':
             model = AlbertForQuestionAnsweringWithSkim.from_pretrained(
                 args.model_name_or_path,
                 from_tf=bool(".ckpt" in args.model_name_or_path),
