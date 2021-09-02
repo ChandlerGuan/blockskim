@@ -33,7 +33,7 @@ class BlockSkim(nn.Module):
                                         stride=1
                                         )
         self.relu3 = nn.ReLU(inplace=True)
-        self.fc = torch.nn.Linear(self.num_attention_heads*self.block_size*self.block_size//16,3)
+        self.fc = torch.nn.Linear(self.num_attention_heads*self.block_size*self.block_size//16,2)
 
     def forward(self, x):
         """
@@ -66,6 +66,7 @@ class BlockSkim(nn.Module):
 mask: [batch, sequence length], answer mask
 """
 def compute_skim_mask(mask, num_block, block_size):
+    mask[mask==2] = 0
     blocked_answer_mask = mask.view((-1, num_block, block_size))
     if blocked_answer_mask.shape[0]==1:
         blocked_answer_mask = blocked_answer_mask.squeeze(axis=0)

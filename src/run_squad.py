@@ -169,7 +169,8 @@ def train(args, train_dataset, model, tokenizer):
     tr_loss, logging_loss = 0.0, 0.0
     if args.block_skim:
         tr_qa_loss, logging_qa_loss, tr_skim_loss, logging_skim_loss = 0.0, 0.0, 0.0, 0.0
-        balance_weight = torch.tensor([1, args.balance_factor, args.evidence_factor]).to(args.device)
+        # balance_weight = torch.tensor([1, args.balance_factor, args.evidence_factor]).to(args.device)
+        balance_weight = torch.tensor([1, args.balance_factor]).to(args.device)
     model.zero_grad()
     train_iterator = trange(
         epochs_trained, int(args.num_train_epochs), desc="Epoch", disable=args.local_rank not in [-1, 0]
