@@ -45,7 +45,6 @@ mkdir -p ${OUTPUT_DIR}
 
 python src/run_squad.py \
   --model_type albert \
-  --block_skim \
   --skim_factor ${SKIM_FACTOR} \
   --balance_factor ${BALANCE_FACTOR} \
   --model_name_or_path albert-base-v2 \
