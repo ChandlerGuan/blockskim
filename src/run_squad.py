@@ -213,16 +213,35 @@ def train(args, train_dataset, model, tokenizer):
             # model outputs are always tuple in transformers (see doc)
 
             if args.block_skim:
-                answer_mask = batch[-1]
-                all_skim_mask = outputs[-1][0]
-                # blocked_answer_mask = answer_mask.view((-1, model.config.max_seq_length//model.config.block_size, model.config.block_size))
-                # skim_label = (torch.sum(blocked_answer_mask, dim=-1)>1).to(dtype=torch.long)
-                skim_label = compute_skim_mask(answer_mask, args.max_seq_length//args.block_size, args.block_size)
-                all_skim_loss = [torch.nn.functional.cross_entropy(skim_mask.view(-1,3), skim_label.view(-1), weight=balance_weight) for skim_mask in all_skim_mask]
-                skim_loss = sum(all_skim_loss)
+                if args.actual_skim:
+                    new_start_logits = torch.ones(batch[0].shape).to(args.device)*-100
+                    new_end_logits = torch.ones(batch[0].shape).to(args.device)*-100
+                    final_skim_mask = torch.ones_like(outputs.all_skim_mask[0][1],dtype=torch.bool)
 
-                qa_loss = outputs[0]
-                loss = args.skim_factor * skim_loss + qa_loss
+                    for layer_idx, skim_mask_tuple in enumerate(outputs.all_skim_mask):
+                        new_final_skim_mask = final_skim_mask.clone()
+                        new_final_skim_mask[final_skim_mask] = skim_mask_tuple[1].view(-1)
+                        final_skim_mask = new_final_skim_mask
+
+                    new_start_logits[final_skim_mask] = outputs[1].view(-1)
+                    new_end_logits[final_skim_mask] = outputs[2].view(-1)
+                    loss_fct = torch.nn.CrossEntropyLoss()
+                    start_loss = loss_fct(new_start_logits, batch[3])
+                    end_loss = loss_fct(new_end_logits, batch[4])
+                    qa_loss = (start_loss + end_loss) / 2
+                    skim_loss = qa_loss
+                    loss = qa_loss
+                else:
+                    qa_loss = outputs[0]
+                    answer_mask = batch[-1]
+                    all_skim_mask = outputs[-1]
+                    # blocked_answer_mask = answer_mask.view((-1, model.config.max_seq_length//model.config.block_size, model.config.block_size))
+                    # skim_label = (torch.sum(blocked_answer_mask, dim=-1)>1).to(dtype=torch.long)
+                    skim_label = compute_skim_mask(answer_mask, args.max_seq_length//args.block_size, args.block_size)
+                    all_skim_loss = [torch.nn.functional.cross_entropy(skim_mask[0].view(-1,2), skim_label.view(-1), weight=balance_weight) for skim_mask in all_skim_mask]
+                    skim_loss = sum(all_skim_loss)
+
+                    loss = args.skim_factor * skim_loss + qa_loss
             else:
                 loss = outputs[0]
 
@@ -358,12 +377,14 @@ def evaluate(args, model, tokenizer, prefix=""):
             outputs = model(**inputs)
 
 
-            if args.actual_skim:
+            if args.block_skim and args.actual_skim:
                 new_start_logits = torch.ones(batch[0].shape).to(args.device)*-100
                 new_end_logits = torch.ones(batch[0].shape).to(args.device)*-100
-                final_skim_mask = torch.ones_like(outputs.all_skim_mask[0][1],dtype=torch.bool)
+                final_skim_mask = torch.ones_like(batch[0],dtype=torch.bool)
 
                 for layer_idx, skim_mask_tuple in enumerate(outputs.all_skim_mask):
+                    if skim_mask_tuple[1]==None:
+                        continue
                     new_final_skim_mask = final_skim_mask.clone()
                     new_final_skim_mask[final_skim_mask] = skim_mask_tuple[1].view(-1)
                     final_skim_mask = new_final_skim_mask
@@ -384,10 +405,12 @@ def evaluate(args, model, tokenizer, prefix=""):
             if args.block_skim:
                 skim_label = compute_skim_mask(batch[-1][i], args.max_seq_length//args.block_size, args.block_size)
                 for layer_idx, skim_mask in enumerate(all_layer_skim_mask):
+                    if outputs.all_skim_mask[layer_idx][0]==None:
+                        continue
                     skim_mask.extend(to_list(torch.argmax(outputs.all_skim_mask[layer_idx][0][i],axis=-1)))
                 all_skim_label.extend(to_list(skim_label))
                 
-                assert len(all_skim_label) == len(all_layer_skim_mask[0])
+                # assert len(all_skim_label) == len(all_layer_skim_mask[0])
 
             # Some models (XLNet, XLM) use 5 arguments for their predictions, while the other "simpler"
             # models only use two.
@@ -419,6 +442,8 @@ def evaluate(args, model, tokenizer, prefix=""):
     if args.block_skim and not args.actual_skim:
         from sklearn.metrics import classification_report
         for layer_idx in range(len(all_layer_skim_mask)):
+            if args.augment_layers and layer_idx not in args.augment_layers:
+                continue
             print(f'evaluating skim predictor of layer {layer_idx}')
             print(classification_report(all_skim_label, all_layer_skim_mask[layer_idx]))
 
@@ -484,7 +509,7 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
         input_dir,
         "cached_{}_{}_{}".format(
             "dev" if evaluate else "train",
-            list(filter(None, args.model_name_or_path.split("/"))).pop(),
+            list(filter(None, args.cache_name.split("/"))).pop() if args.cache_name else list(filter(None, args.model_name_or_path.split("/"))).pop(),
             str(args.max_seq_length),
         ),
     )
@@ -738,6 +763,9 @@ def main():
     parser.add_argument("--skim_factor", default=0.0001, type=float, help="factor for skim predictor")
     parser.add_argument("--balance_factor", default=1, type=float, help="factor for skim predictor")
     parser.add_argument("--evidence_factor", default=1, type=float, help="factor for evidence loss")
+    parser.add_argument("--cache_name", type=str, help="cached feature dir")
+    parser.add_argument("--augment_layers", type=int, nargs="+", help="layers to augment blockskim module")
+    parser.add_argument("--skim_threshold", type=float, default=0.5, help="threshold for skim predictor")
 
     args = parser.parse_args()
 
@@ -823,6 +851,8 @@ def main():
             if args.actual_skim:
                 config.actual_skim = True
             config.block_size = args.block_size
+            config.augment_layers = args.augment_layers if args.augment_layers else list(range(config.num_hidden_layers))
+            config.skim_threshold = args.skim_threshold
             model = BertForQuestionAnsweringWithSkim.from_pretrained(
                 args.model_name_or_path,
                 from_tf=bool(".ckpt" in args.model_name_or_path),

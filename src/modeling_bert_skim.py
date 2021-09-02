@@ -213,7 +213,7 @@ def convert_block_mask_to_token(mask, block_size):
     mask = mask.unsqueeze(-1).repeat(1,1,block_size).view(mask.shape[0],-1)
     return mask
 
-def compute_skim_prediction_aligned(skim_mask, block_size):
+def compute_skim_prediction_aligned(skim_mask, block_size, thold=0.5):
     """
     compute the skim prediction for a batch of input to align
     skim_indices [batch, sequence_length]
@@ -221,9 +221,10 @@ def compute_skim_prediction_aligned(skim_mask, block_size):
         True for remained
     """
     skim_mask = skim_mask.softmax(dim=-1)
-
+    
     # skim decision with threshold 0.5
-    skim_mask_prediction = skim_mask.argmax(dim=-1)
+    # skim_mask_prediction = skim_mask.argmax(dim=-1)
+    skim_mask_prediction = (skim_mask[:,:,1]>=thold)
 
     # calculate input with most tokens remained
     max_remained_length = skim_mask_prediction.sum(dim=-1).max()
@@ -433,7 +434,7 @@ class BertSelfAttention(nn.Module):
         # chandler
         # skim_mask predicted by block skim module
         # skim_mask: [batch_size, max_seq_length/block_size]
-        skim_mask = self.skim_predictor(attention_probs)
+        skim_mask = self.skim_predictor(attention_probs) if self.augment_predictor else None
 
         # Mask heads if we want to
         if head_mask is not None:
@@ -637,6 +638,13 @@ class BertEncoder(nn.Module):
         self.layer = nn.ModuleList([BertLayer(config) for _ in range(config.num_hidden_layers)])
 
         self.actual_skim = config.actual_skim if hasattr(config, 'actual_skim') else False
+        self.skim_threshold = config.skim_threshold
+
+        for layer_idx, layer_module in enumerate(self.layer):
+            if layer_idx in config.augment_layers:
+                layer_module.attention.self.augment_predictor = True
+            else:
+                layer_module.attention.self.augment_predictor = False
 
     def forward(
         self,
@@ -709,9 +717,12 @@ class BertEncoder(nn.Module):
             # preform actual skim of input dim reduction with predicted mask
             if self.actual_skim:
                 skim_mask = layer_outputs[-1]
-                skim_mask_prediction = compute_skim_prediction_aligned(skim_mask, 32)
-                hidden_states = trunc_with_mask_batched(hidden_states, skim_mask_prediction, dim=1)
-                attention_mask = trunc_with_mask_batched(attention_mask, skim_mask_prediction, dim=3)
+                if not skim_mask == None:
+                    skim_mask_prediction = compute_skim_prediction_aligned(skim_mask, 32, thold=self.skim_threshold)
+                    hidden_states = trunc_with_mask_batched(hidden_states, skim_mask_prediction, dim=1)
+                    attention_mask = trunc_with_mask_batched(attention_mask, skim_mask_prediction, dim=3)
+                else:
+                    skim_mask_prediction = None
 
             all_skim_mask.append((layer_outputs[-1], skim_mask_prediction,) if self.actual_skim else (layer_outputs[-1],))
 

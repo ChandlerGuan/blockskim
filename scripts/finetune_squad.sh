@@ -52,6 +52,7 @@ python src/run_squad.py \
   --seed ${SEED} \
   --evidence_factor 1 \
   --model_name_or_path bert-base-uncased \
+  --seed 43 \
   --do_lower_case \
   --do_train \
   --do_eval \
