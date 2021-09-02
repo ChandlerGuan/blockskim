@@ -59,6 +59,7 @@ from squad.squad import squad_convert_examples_to_features
 logger = logging.getLogger(__name__)
 
 from modeling_bert_skim import BertForQuestionAnswering as BertForQuestionAnsweringWithSkim
+from modeling_albert_skim import AlbertForQuestionAnswering as AlbertForQuestionAnsweringWithSkim
 from modeling_blockskim import compute_skim_mask
 from squad.transformer_squad_processor import SquadV1Processor, SquadV2Processor
 
@@ -846,20 +847,28 @@ def main():
         use_fast=False,  # SquadDataset is not compatible with Fast tokenizers which have a smarter overflow handeling
     )
     if args.block_skim:
+        if not args.model_type in ['bert', 'albert']:
+            raise ValueError(f"{args.model_type} with skim not implemented")
+        if args.actual_skim:
+            config.actual_skim = True
+        config.block_size = args.block_size
+        config.augment_layers = args.augment_layers if args.augment_layers else list(range(config.num_hidden_layers))
+        config.skim_threshold = args.skim_threshold
+        config.output_attentions = True
         if args.model_type =='bert':
-            if args.actual_skim:
-                config.actual_skim = True
-            config.block_size = args.block_size
-            config.augment_layers = args.augment_layers if args.augment_layers else list(range(config.num_hidden_layers))
-            config.skim_threshold = args.skim_threshold
             model = BertForQuestionAnsweringWithSkim.from_pretrained(
                 args.model_name_or_path,
                 from_tf=bool(".ckpt" in args.model_name_or_path),
                 config=config,
                 cache_dir=args.cache_dir if args.cache_dir else None,
             )
-        else:
-            raise ValueError(f"{args.model_type} with skim not implemented")
+        elif:
+            model = AlbertForQuestionAnsweringWithSkim.from_pretrained(
+                args.model_name_or_path,
+                from_tf=bool(".ckpt" in args.model_name_or_path),
+                config=config,
+                cache_dir=args.cache_dir if args.cache_dir else None,
+            )
     else:
         model = AutoModelForQuestionAnswering.from_pretrained(
             args.model_name_or_path,
