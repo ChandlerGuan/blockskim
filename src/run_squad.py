@@ -862,7 +862,7 @@ def main():
                 config=config,
                 cache_dir=args.cache_dir if args.cache_dir else None,
             )
-        elif args.model_type == 'albert':
+        elif:
             model = AlbertForQuestionAnsweringWithSkim.from_pretrained(
                 args.model_name_or_path,
                 from_tf=bool(".ckpt" in args.model_name_or_path),
@@ -917,10 +917,7 @@ def main():
 
         # Load a trained model and vocabulary that you have fine-tuned
         if args.block_skim:
-            if args.model_type =='bert':
-                model = BertForQuestionAnsweringWithSkim.from_pretrained(args.output_dir,config=config)
-            elif args.model_type == 'albert':
-                model = AlbertForQuestionAnsweringWithSkim.from_pretrained(args.output_dir,config=config)
+            model = BertForQuestionAnsweringWithSkim.from_pretrained(args.output_dir,config=config)
         else:
             model = AutoModelForQuestionAnswering.from_pretrained(args.output_dir)  # , force_download=True)
 
@@ -951,10 +948,7 @@ def main():
             # Reload the model
             global_step = checkpoint.split("-")[-1] if len(checkpoints) > 1 else ""
             if args.block_skim:
-                if args.model_type =='bert':
-                    model = BertForQuestionAnsweringWithSkim.from_pretrained(checkpoint,config=config)
-                elif args.model_type == 'albert':
-                    model = AlbertForQuestionAnsweringWithSkim.from_pretrained(checkpoint,config=config)
+                model = BertForQuestionAnsweringWithSkim.from_pretrained(checkpoint,config=config)
             else:
                 model = AutoModelForQuestionAnswering.from_pretrained(checkpoint)  # , force_download=True)
             model.to(args.device)
