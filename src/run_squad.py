@@ -80,7 +80,7 @@ def to_list(tensor):
     return tensor.detach().cpu().tolist()
 
 
-def train(args, train_dataset, model, tokenizer):
+def train(args, train_dataset, model, tokenizer, teacher=None):
     """Train the model"""
     if args.local_rank in [-1, 0]:
         tb_writer = SummaryWriter(args.output_dir)
@@ -189,6 +189,8 @@ def train(args, train_dataset, model, tokenizer):
                 continue
 
             model.train()
+            if teacher is not None:
+                teacher.eval()
             batch = tuple(t.to(args.device) for t in batch)
 
             inputs = {
@@ -246,6 +248,39 @@ def train(args, train_dataset, model, tokenizer):
                     loss = args.skim_factor * skim_loss + qa_loss
             else:
                 loss = outputs[0]
+
+            # Distillation loss
+            if teacher is not None:
+                if "token_type_ids" not in inputs:
+                    inputs["token_type_ids"] = None if args.teacher_type == "xlm" else batch[2]
+                with torch.no_grad():
+                    teacher_outputs = teacher(
+                        input_ids=inputs["input_ids"],
+                        token_type_ids=inputs["token_type_ids"],
+                        attention_mask=inputs["attention_mask"],
+                    )
+                start_logits_tea, end_logits_tea = teacher_outputs.start_logits, teacher_outputs.end_logits
+                assert start_logits_tea.size() == outputs[1].size()
+                assert end_logits_tea.size() == outputs[2].size()
+
+                loss_fct = torch.nn.KLDivLoss(reduction="batchmean")
+                loss_start = (
+                    loss_fct(
+                        torch.nn.functional.log_softmax(outputs[1] / args.temperature, dim=-1),
+                        torch.nn.functional.softmax(start_logits_tea / args.temperature, dim=-1),
+                    )
+                    * (args.temperature ** 2)
+                )
+                loss_end = (
+                    loss_fct(
+                        torch.nn.functional.log_softmax(outputs[2] / args.temperature, dim=-1),
+                        torch.nn.functional.softmax(end_logits_tea / args.temperature, dim=-1),
+                    )
+                    * (args.temperature ** 2)
+                )
+                loss_ce = (loss_start + loss_end) / 2.0
+
+                loss = args.alpha_ce * loss_ce + args.alpha_squad * loss
 
             if args.n_gpu > 1:
                 loss = loss.mean()  # mean() to average on multi-gpu parallel (not distributed) training
@@ -768,6 +803,30 @@ def main():
     parser.add_argument("--augment_layers", type=int, nargs="+", help="layers to augment blockskim module")
     parser.add_argument("--skim_threshold", type=float, default=0.5, help="threshold for skim predictor")
 
+
+    # Distillation parameters (optional)
+    parser.add_argument(
+        "--teacher_type",
+        default=None,
+        type=str,
+        help="Teacher type. Teacher tokenizer and student (model) tokenizer must output the same tokenization. Only for distillation.",
+    )
+    parser.add_argument(
+        "--teacher_name_or_path",
+        default=None,
+        type=str,
+        help="Path to the already SQuAD fine-tuned teacher model. Only for distillation.",
+    )
+    parser.add_argument(
+        "--alpha_ce", default=0.5, type=float, help="Distillation loss linear weight. Only for distillation."
+    )
+    parser.add_argument(
+        "--alpha_squad", default=0.5, type=float, help="True SQuAD loss linear weight. Only for distillation."
+    )
+    parser.add_argument(
+        "--temperature", default=2.0, type=float, help="Distillation temperature. Only for distillation."
+    )
+
     args = parser.parse_args()
 
     if args.doc_stride >= args.max_seq_length - args.max_query_length:
@@ -848,7 +907,7 @@ def main():
         use_fast=False,  # SquadDataset is not compatible with Fast tokenizers which have a smarter overflow handeling
     )
     if args.block_skim:
-        if not args.model_type in ['bert', 'albert']:
+        if not args.model_type in ['bert', 'albert', 'distilbert']:
             raise ValueError(f"{args.model_type} with skim not implemented")
         if args.actual_skim:
             config.actual_skim = True
@@ -885,6 +944,21 @@ def main():
             cache_dir=args.cache_dir if args.cache_dir else None,
         )
 
+    if args.teacher_type is not None:
+        assert args.teacher_name_or_path is not None
+        assert args.alpha_ce > 0.0
+        assert args.alpha_ce + args.alpha_squad > 0.0
+        assert args.teacher_type != "distilbert", "We constraint teachers not to be of type DistilBERT."
+        teacher_config = AutoConfig.from_pretrained(
+            args.teacher_name_or_path, cache_dir=args.cache_dir if args.cache_dir else None
+        )
+        teacher = AutoModelForQuestionAnswering.from_pretrained(
+            args.teacher_name_or_path, config=teacher_config, cache_dir=args.cache_dir if args.cache_dir else None
+        )
+        teacher.to(args.device)
+    else:
+        teacher = None
+
     if args.local_rank == 0:
         # Make sure only the first process in distributed training will download model & vocab
         torch.distributed.barrier()
@@ -907,7 +981,7 @@ def main():
     # Training
     if args.do_train:
         train_dataset = load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=False)
-        global_step, tr_loss = train(args, train_dataset, model, tokenizer)
+        global_step, tr_loss = train(args, train_dataset, model, tokenizer, teacher=teacher)
         logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
 
     # Save the trained model and the tokenizer
