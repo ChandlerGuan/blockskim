@@ -170,6 +170,7 @@ def train(args, train_dataset, model, tokenizer):
     tr_loss, logging_loss = 0.0, 0.0
     if args.block_skim:
         tr_qa_loss, logging_qa_loss, tr_skim_loss, logging_skim_loss = 0.0, 0.0, 0.0, 0.0
+        # balance_weight = torch.tensor([1, args.balance_factor, args.evidence_factor]).to(args.device)
         balance_weight = torch.tensor([1, args.balance_factor]).to(args.device)
     model.zero_grad()
     train_iterator = trange(
@@ -763,6 +764,7 @@ def main():
     parser.add_argument("--block_size", type=int, default=32, help="block size for block skim module")
     parser.add_argument("--skim_factor", default=0.0001, type=float, help="factor for skim predictor")
     parser.add_argument("--balance_factor", default=1, type=float, help="factor for skim predictor")
+    parser.add_argument("--evidence_factor", default=1, type=float, help="factor for evidence loss")
     parser.add_argument("--cache_name", type=str, help="cached feature dir")
     parser.add_argument("--augment_layers", type=int, nargs="+", help="layers to augment blockskim module")
     parser.add_argument("--skim_threshold", type=float, default=0.5, help="threshold for skim predictor")

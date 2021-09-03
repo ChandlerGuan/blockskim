@@ -1,7 +1,7 @@
-OUTPUT_DIR=model/tmp/eval/debug
-DATA_DIR=/home/yguan/blockskim/datasets/squad
+OUTPUT_DIR=/home/yguan/blockskim/model/tmp/eval/debug
+DATA_DIR=/home/yguan/blockskim/datasets/hotpotqa
 
-EVAL_CKPT_DIR=/home/yguan/blockskim2/model/block_skim/albert_base/skim_0.1_balance_20_09-02-15-19/
+EVAL_CKPT_DIR=/home/yguan/blockskim/model/hotpotqa/block_skim_new/skim_0.1_balance_20_seed_42_09-02-11-01
 
 
 # if [ -d "$OUTPUT_DIR" ]; then
@@ -35,16 +35,20 @@ mkdir -p ${OUTPUT_DIR}
 #   --output_dir ${OUTPUT_DIR} 2>&1 | tee ${OUTPUT_DIR}/log_finetune.log
 
 python -u src/run_squad.py \
-  --model_type albert \
+  --model_type bert \
+  --actual_skim \
   --block_skim \
+  --skim_threshold 0.1 \
   --model_name_or_path ${EVAL_CKPT_DIR} \
-  --cache_name albert-base-v2 \
   --do_lower_case \
   --do_eval \
-  --predict_file dev-v1.1.json \
+  --block_skim \
+  --predict_file gold_validation.json \
   --data_dir ${DATA_DIR} \
   --per_gpu_eval_batch_size=64 \
   --max_seq_length 512 \
   --doc_stride 128 \
   --overwrite_output_dir \
+  --overwrite_cache \
+  --threads 1 \
   --output_dir ${OUTPUT_DIR} 2>&1 | tee ${OUTPUT_DIR}/log_finetune.log
