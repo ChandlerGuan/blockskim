@@ -116,8 +116,8 @@ def squad_convert_example_to_features(
         end_position = example.end_position
 
         # If the answer cannot be found in the text, then skip this example.
-        actual_text = " ".join(example.doc_tokens[start_position : (end_position + 1)])
-        cleaned_answer_text = " ".join(whitespace_tokenize(example.answer_text))
+        actual_text = " ".join(example.doc_tokens[start_position : (end_position + 1)]).lower()
+        cleaned_answer_text = " ".join(whitespace_tokenize(example.answer_text)).lower()
         if actual_text.find(cleaned_answer_text) == -1:
             logger.warning(f"Could not find answer: '{actual_text}' vs. '{cleaned_answer_text}'")
             return []
