@@ -25,15 +25,15 @@ import torch
 from torch import nn
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 
-from ...activations import gelu
-from ...deepspeed import is_deepspeed_zero3_enabled
-from ...file_utils import (
+from transformers.activations import gelu
+from transformers.deepspeed import is_deepspeed_zero3_enabled
+from transformers.file_utils import (
     add_code_sample_docstrings,
     add_start_docstrings,
     add_start_docstrings_to_model_forward,
     replace_return_docstrings,
 )
-from ...modeling_outputs import (
+from transformers.modeling_outputs import (
     BaseModelOutput,
     MaskedLMOutput,
     MultipleChoiceModelOutput,
@@ -41,15 +41,22 @@ from ...modeling_outputs import (
     SequenceClassifierOutput,
     TokenClassifierOutput,
 )
-from ...modeling_utils import (
+from transformers.modeling_utils import (
     PreTrainedModel,
     apply_chunking_to_forward,
     find_pruneable_heads_and_indices,
     prune_linear_layer,
 )
-from ...utils import logging
-from .configuration_distilbert import DistilBertConfig
+from transformers.utils import logging
+from transformers.models.distilbert.configuration_distilbert import DistilBertConfig
 
+from modeling_blockskim import BlockSkim
+from modeling_outputs_skim import (
+    BaseModelOutputWithSkim,
+    QuestionAnsweringModelOutputWithSkim,
+    BaseModelOutputWithPoolingWithSkim,
+)
+from utils_skim import compute_skim_prediction_aligned, trunc_with_mask_batched
 
 logger = logging.get_logger(__name__)
 _CHECKPOINT_FOR_DOC = "distilbert-base-uncased"
@@ -286,6 +293,12 @@ class Transformer(nn.Module):
         self.n_layers = config.n_layers
         self.layer = nn.ModuleList([TransformerBlock(config) for _ in range(config.n_layers)])
 
+        self.actual_skim = config.actual_skim if hasattr(config, 'actual_skim') else False
+        self.skim_threshold = config.skim_threshold
+
+        self.skim_predictors = nn.ModuleList([BlockSkim(config) for _ in range(config.n_layers)])
+        self.config = config
+
     def forward(
         self, x, attn_mask=None, head_mask=None, output_attentions=False, output_hidden_states=False, return_dict=None
     ):  # docstyle-ignore
@@ -305,6 +318,7 @@ class Transformer(nn.Module):
         """
         all_hidden_states = () if output_hidden_states else None
         all_attentions = () if output_attentions else None
+        all_skim_masks = list()
 
         hidden_state = x
         for i, layer_module in enumerate(self.layer):
@@ -315,6 +329,22 @@ class Transformer(nn.Module):
                 x=hidden_state, attn_mask=attn_mask, head_mask=head_mask[i], output_attentions=output_attentions
             )
             hidden_state = layer_outputs[-1]
+
+            if i in self.config.augment_layers:
+                skim_mask = self.skim_predictors[i](layer_outputs[0])
+            else:
+                skim_mask = None
+                
+            # preform actual skim of input dim reduction with predicted mask
+            if self.actual_skim:
+                if not skim_mask == None:
+                    skim_mask_prediction = compute_skim_prediction_aligned(skim_mask, 32, thold=self.skim_threshold)
+                    hidden_state = trunc_with_mask_batched(hidden_state, skim_mask_prediction, dim=1)
+                    attn_mask = trunc_with_mask_batched(attn_mask, skim_mask_prediction, dim=1)
+                else:
+                    skim_mask_prediction = None
+
+            all_skim_masks.append((skim_mask, skim_mask_prediction,) if self.actual_skim else (skim_mask,))
 
             if output_attentions:
                 assert len(layer_outputs) == 2
@@ -329,8 +359,8 @@ class Transformer(nn.Module):
 
         if not return_dict:
             return tuple(v for v in [hidden_state, all_hidden_states, all_attentions] if v is not None)
-        return BaseModelOutput(
-            last_hidden_state=hidden_state, hidden_states=all_hidden_states, attentions=all_attentions
+        return BaseModelOutputWithSkim(
+            last_hidden_state=hidden_state, hidden_states=all_hidden_states, attentions=all_attentions, all_skim_mask=all_skim_masks,
         )
 
 
@@ -760,12 +790,13 @@ class DistilBertForQuestionAnswering(DistilBertPreTrainedModel):
             output = (start_logits, end_logits) + distilbert_output[1:]
             return ((total_loss,) + output) if total_loss is not None else output
 
-        return QuestionAnsweringModelOutput(
+        return QuestionAnsweringModelOutputWithSkim(
             loss=total_loss,
             start_logits=start_logits,
             end_logits=end_logits,
             hidden_states=distilbert_output.hidden_states,
             attentions=distilbert_output.attentions,
+            all_skim_mask=distilbert_output.all_skim_mask,
         )
 
 
@@ -959,3 +990,23 @@ class DistilBertForMultipleChoice(DistilBertPreTrainedModel):
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
+
+def test_DistilBertForQuestionAnswering():
+    config = DistilBertConfig.from_pretrained('distilbert-base-uncased')
+    config.max_seq_length = 512
+    config.block_size = 32
+    config.actual_skim = True
+    config.skim_threshold = 0.5
+    config.augment_layers = list(range(config.num_hidden_layers))
+    config.output_attentions = True
+
+    bert = DistilBertForQuestionAnswering(config)
+
+    hidden_states = torch.randint(0,15,(2, config.max_seq_length))
+
+    y = bert(hidden_states,return_dict=True)
+
+    print(y.start_logits.shape)
+
+if __name__ == "__main__":
+    test_DistilBertForQuestionAnswering()

@@ -60,6 +60,7 @@ logger = logging.getLogger(__name__)
 
 from modeling_bert_skim import BertForQuestionAnswering as BertForQuestionAnsweringWithSkim
 from modeling_albert_skim import AlbertForQuestionAnswering as AlbertForQuestionAnsweringWithSkim
+from modeling_distilbert_skim import DistilBertForQuestionAnswering as DistilBertForQuestionAnsweringWithSkim
 from modeling_blockskim import compute_skim_mask
 from squad.transformer_squad_processor import SquadV1Processor, SquadV2Processor
 
@@ -869,6 +870,13 @@ def main():
                 config=config,
                 cache_dir=args.cache_dir if args.cache_dir else None,
             )
+        elif args.model_type == 'distilbert':
+            model = DistilBertForQuestionAnsweringWithSkim.from_pretrained(
+                args.model_name_or_path,
+                from_tf=bool(".ckpt" in args.model_name_or_path),
+                config=config,
+                cache_dir=args.cache_dir if args.cache_dir else None,
+            )
     else:
         model = AutoModelForQuestionAnswering.from_pretrained(
             args.model_name_or_path,
@@ -921,6 +929,8 @@ def main():
                 model = BertForQuestionAnsweringWithSkim.from_pretrained(args.output_dir,config=config)
             elif args.model_type == 'albert':
                 model = AlbertForQuestionAnsweringWithSkim.from_pretrained(args.output_dir,config=config)
+            elif args.model_type == 'distilbert':
+                model = DistilBertForQuestionAnsweringWithSkim.from_pretrained(args.output_dir,config=config)
         else:
             model = AutoModelForQuestionAnswering.from_pretrained(args.output_dir)  # , force_download=True)
 
@@ -955,6 +965,8 @@ def main():
                     model = BertForQuestionAnsweringWithSkim.from_pretrained(checkpoint,config=config)
                 elif args.model_type == 'albert':
                     model = AlbertForQuestionAnsweringWithSkim.from_pretrained(checkpoint,config=config)
+                elif args.model_type == 'distilbert':
+                    model = DistilBertForQuestionAnsweringWithSkim.from_pretrained(checkpoint,config=config)
             else:
                 model = AutoModelForQuestionAnswering.from_pretrained(checkpoint)  # , force_download=True)
             model.to(args.device)
