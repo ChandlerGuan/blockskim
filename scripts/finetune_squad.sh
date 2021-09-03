@@ -1,17 +1,19 @@
-DATA_DIR=/home/yguan/blockskim/datasets/squad
+DATA_DIR=/home/yguan/blockskim/datasets/datasets/mrqa/
 
 
-# BALANCE_FACTOR=20
-# SKIM_FACTOR=0.1
+BALANCE_FACTOR=20
+SKIM_FACTOR=0.1
 
-for BALANCE_FACTOR in 1 20 100
-do
-for SKIM_FACTOR in 10 1 0.1 0.01
-do
+# for BALANCE_FACTOR in 1 20 100
+# do
+# for SKIM_FACTOR in 10 1 0.1 0.01
+# do
 
 # OUTPUT_DIR=model/block_skim/bert_large_wwm/baseline
 # OUTPUT_DIR=model/block_skim/bert_large_wwm/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}_seed_43
-OUTPUT_DIR=model/block_skim/bert_base_new/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
+# OUTPUT_DIR=model/block_skim/bert_base_new/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
+OUTPUT_DIR=model/search_qa/block_skim/bert_base/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
+
 
 if [ -d "$OUTPUT_DIR" ]; then
   OUTPUT_DIR=${OUTPUT_DIR}_$(date +"%m-%d-%H-%M")
@@ -53,8 +55,8 @@ python src/run_squad.py \
   --do_lower_case \
   --do_train \
   --do_eval \
-  --train_file train-v1.1.json \
-  --predict_file dev-v1.1.json \
+  --train_file train/SearchQA-train-from-MRQA.json.json \
+  --predict_file dev/SearchQA-dev-from-MRQA.json.json \
   --data_dir ${DATA_DIR} \
   --per_gpu_train_batch_size 12 \
   --per_gpu_eval_batch_size=16 \
