@@ -1,13 +1,13 @@
 DATA_DIR=/home/yguan/blockskim/datasets/squad
 
 
-BALANCE_FACTOR=20
-SKIM_FACTOR=0.1
+# BALANCE_FACTOR=20
+# SKIM_FACTOR=0.1
 
-# for BALANCE_FACTOR in 1 20 100
-# do
-# for SKIM_FACTOR in 10 1 0.1 0.01
-# do
+for BALANCE_FACTOR in 1  20 100
+do
+for SKIM_FACTOR in 10 1 0.1 0.01
+do
 
 # OUTPUT_DIR=model/block_skim/bert_large_wwm/baseline
 # OUTPUT_DIR=model/block_skim/bert_large_wwm/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}_seed_43
@@ -45,6 +45,7 @@ mkdir -p ${OUTPUT_DIR}
 
 python src/run_squad.py \
   --model_type albert \
+  --block_skim \
   --skim_factor ${SKIM_FACTOR} \
   --balance_factor ${BALANCE_FACTOR} \
   --model_name_or_path albert-base-v2 \
@@ -56,7 +57,7 @@ python src/run_squad.py \
   --data_dir ${DATA_DIR} \
   --per_gpu_train_batch_size 12 \
   --per_gpu_eval_batch_size=16 \
-  --learning_rate 3e-5 \
+  --learning_rate 5e-5 \
   --num_train_epochs 2.0 \
   --max_seq_length 512 \
   --doc_stride 128 \
