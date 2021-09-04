@@ -1,6 +1,6 @@
 DATA_DIR=datasets/squad
 
-EVAL_CKPT_DIR=model/block_skim/skim_0.001_balance_100/
+EVAL_CKPT_DIR=model/block_skim/skim_0.1_balance_20/
 
 
 # if [ -d "$OUTPUT_DIR" ]; then
@@ -49,7 +49,7 @@ CUDA_LAUNCH_BLOCKING=1 python src/run_squad.py \
   --do_eval \
   --predict_file dev-v1.1.json \
   --data_dir ${DATA_DIR} \
-  --per_gpu_eval_batch_size=16 \
+  --per_gpu_eval_batch_size=256 \
   --max_seq_length 512 \
   --doc_stride 128 \
   --overwrite_output_dir \
