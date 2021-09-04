@@ -13,6 +13,8 @@ class BlockSkim(nn.Module):
         self.block_size = config.block_size
         self.num_attention_heads = config.num_attention_heads
 
+        self.pruned_heads = set()
+
         self.conv1 = torch.nn.Conv2d(config.num_attention_heads,config.num_attention_heads,
                                         kernel_size=self.kernel_size,
                                         stride=self.stride,
@@ -39,13 +41,17 @@ class BlockSkim(nn.Module):
     def prune_heads(self, heads: List):
         if len(heads) == 0:
             return
+        if self.pruned_heads:
+            return
+
         mask = torch.ones(self.num_attention_heads)
         for head in heads:
             mask[head] = 0
-        mask = torch.arange(self.num_attention_heads)[mask==1]
+        mask = torch.arange(self.num_attention_heads,device=self.conv1.weight.device,)[mask==1]
 
         self.prev_num_attention_heads = self.num_attention_heads
         self.num_attention_heads = self.num_attention_heads - len(heads)
+        self.pruned_heads = self.pruned_heads.union(heads)
         
         new_conv1 = torch.nn.Conv2d(self.num_attention_heads,self.prev_num_attention_heads,
                                 kernel_size=self.kernel_size,
@@ -53,7 +59,6 @@ class BlockSkim(nn.Module):
                                 padding=self.kernel_size//2,
                                 device=self.conv1.weight.device,
                                 )
-
         new_weight = self.conv1.weight.index_select(dim=1, index=mask).clone().detach()
         new_bias = self.conv1.bias.clone().detach()
 

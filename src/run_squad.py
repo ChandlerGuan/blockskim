@@ -86,7 +86,7 @@ def train(args, train_dataset, model, tokenizer):
     if args.local_rank in [-1, 0]:
         tb_writer = SummaryWriter(args.output_dir)
 
-    model.prune_heads(calculate_prune_dict(k=args.pruning_k))
+    model.prune_heads(calculate_prune_dict(file_name='/home/yguan/blockskim/tmp/head_pruning/prune_single_head.csv',k=args.pruning_k))
 
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
@@ -502,9 +502,9 @@ def evaluate(args, model, tokenizer, prefix=""):
     # Compute the F1 and exact scores.
     results = squad_evaluate(examples, predictions)
 
-    with open('tmp/head_pruning/single_head.txt', 'a') as output_file:
-        output_file.write(f"layer: {args.head_pruning_layer}, head: {args.head_pruning_idx}\n")
-        output_file.write(f"{results}\n")
+    # with open('tmp/head_pruning/single_head.txt', 'a') as output_file:
+    #     output_file.write(f"layer: {args.head_pruning_layer}, head: {args.head_pruning_idx}\n")
+    #     output_file.write(f"{results}\n")
 
     return results
 
