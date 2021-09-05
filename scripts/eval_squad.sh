@@ -36,19 +36,16 @@ mkdir -p ${OUTPUT_DIR}
 
 python -u src/run_squad.py \
   --model_type bert \
-  --actual_skim \
-  --block_skim \
-  --skim_threshold 0.1 \
+  --skim_threshold 0.01 \
+  --per_gpu_eval_batch_size=1 \
+  --fast_eval 100 \
   --model_name_or_path ${EVAL_CKPT_DIR} \
   --do_lower_case \
   --do_eval \
   --block_skim \
   --predict_file gold_validation.json \
   --data_dir ${DATA_DIR} \
-  --per_gpu_eval_batch_size=256 \
   --max_seq_length 512 \
   --doc_stride 128 \
   --overwrite_output_dir \
-  --overwrite_cache \
-  --threads 1 \
   --output_dir ${OUTPUT_DIR} 2>&1 | tee ${OUTPUT_DIR}/log_finetune.log
