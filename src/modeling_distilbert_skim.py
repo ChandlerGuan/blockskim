@@ -326,7 +326,7 @@ class Transformer(nn.Module):
                 all_hidden_states = all_hidden_states + (hidden_state,)
 
             layer_outputs = layer_module(
-                x=hidden_state, attn_mask=attn_mask, head_mask=head_mask[i], output_attentions=output_attentions
+                x=hidden_state, attn_mask=attn_mask, head_mask=None, output_attentions=output_attentions
             )
             hidden_state = layer_outputs[-1]
 

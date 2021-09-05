@@ -60,6 +60,7 @@ logger = logging.getLogger(__name__)
 
 from modeling_bert_skim import BertForQuestionAnswering as BertForQuestionAnsweringWithSkim
 from modeling_albert_skim import AlbertForQuestionAnswering as AlbertForQuestionAnsweringWithSkim
+from modeling_distilbert_skim import DistilBertForQuestionAnswering as DistilBertForQuestionAnsweringWithSkim
 from modeling_blockskim import compute_skim_mask
 from squad.transformer_squad_processor import SquadV1Processor, SquadV2Processor
 
@@ -889,7 +890,7 @@ def main():
         use_fast=False,  # SquadDataset is not compatible with Fast tokenizers which have a smarter overflow handeling
     )
     if args.block_skim:
-        if not args.model_type in ['bert', 'albert']:
+        if not args.model_type in ['bert', 'albert', 'distilbert']:
             raise ValueError(f"{args.model_type} with skim not implemented")
         if args.actual_skim:
             config.actual_skim = True
@@ -911,6 +912,13 @@ def main():
                 config=config,
                 cache_dir=args.cache_dir if args.cache_dir else None,
             )
+        elif args.model_type == 'distilbert':
+            model = DistilBertForQuestionAnsweringWithSkim.from_pretrained(
+                args.model_name_or_path,
+                from_tf=bool(".ckpt" in args.model_name_or_path),
+                config=config,
+                cache_dir=args.cache_dir if args.cache_dir else None,
+            )
     else:
         model = AutoModelForQuestionAnswering.from_pretrained(
             args.model_name_or_path,
@@ -918,7 +926,6 @@ def main():
             config=config,
             cache_dir=args.cache_dir if args.cache_dir else None,
         )
-
     if args.local_rank == 0:
         # Make sure only the first process in distributed training will download model & vocab
         torch.distributed.barrier()
@@ -959,10 +966,12 @@ def main():
 
         # Load a trained model and vocabulary that you have fine-tuned
         if args.block_skim:
-            model = BertForQuestionAnsweringWithSkim.from_pretrained(args.output_dir,config=config)
+            if args.model_type =='bert':
+                model = BertForQuestionAnsweringWithSkim.from_pretrained(args.output_dir,config=config)
+            elif args.model_type == 'distilbert':
+                model = DistilBertForQuestionAnsweringWithSkim.from_pretrained(args.output_dir,config=config)
         else:
             model = AutoModelForQuestionAnswering.from_pretrained(args.output_dir)  # , force_download=True)
-
         # SquadDataset is not compatible with Fast tokenizers which have a smarter overflow handeling
         # So we use use_fast=False here for now until Fast-tokenizer-compatible-examples are out
         tokenizer = AutoTokenizer.from_pretrained(args.output_dir, do_lower_case=args.do_lower_case, use_fast=False)
@@ -990,9 +999,12 @@ def main():
             # Reload the model
             global_step = checkpoint.split("-")[-1] if len(checkpoints) > 1 else ""
             if args.block_skim:
-                model = BertForQuestionAnsweringWithSkim.from_pretrained(checkpoint,config=config)
-            else:
-                model = AutoModelForQuestionAnswering.from_pretrained(checkpoint)  # , force_download=True)
+                if args.model_type =='bert':
+                    model = BertForQuestionAnsweringWithSkim.from_pretrained(checkpoint,config=config)
+                elif args.model_type == 'distilbert':
+                    model = DistilBertForQuestionAnsweringWithSkim.from_pretrained(checkpoint,config=config)
+                else:
+                    model = AutoModelForQuestionAnswering.from_pretrained(checkpoint)  # , force_download=True)
             model.to(args.device)
 
             # Evaluate
