@@ -86,7 +86,7 @@ def train(args, train_dataset, model, tokenizer):
     if args.local_rank in [-1, 0]:
         tb_writer = SummaryWriter(args.output_dir)
 
-    model.prune_heads(calculate_prune_dict(k=args.pruning_k))
+    model.prune_heads(calculate_prune_dict(file_name='/home/yguan/blockskim/tmp/head_pruning/prune_single_head.csv',k=args.pruning_k))
 
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
@@ -502,9 +502,9 @@ def evaluate(args, model, tokenizer, prefix=""):
     # Compute the F1 and exact scores.
     results = squad_evaluate(examples, predictions)
 
-    with open('tmp/head_pruning/single_head.txt', 'a') as output_file:
-        output_file.write(f"layer: {args.head_pruning_layer}, head: {args.head_pruning_idx}\n")
-        output_file.write(f"{results}\n")
+    # with open('tmp/head_pruning/single_head.txt', 'a') as output_file:
+    #     output_file.write(f"layer: {args.head_pruning_layer}, head: {args.head_pruning_idx}\n")
+    #     output_file.write(f"{results}\n")
 
     return results
 
@@ -773,15 +773,14 @@ def main():
     parser.add_argument("--block_size", type=int, default=32, help="block size for block skim module")
     parser.add_argument("--skim_factor", default=0.0001, type=float, help="factor for skim predictor")
     parser.add_argument("--balance_factor", default=1, type=float, help="factor for skim predictor")
-
-    parser.add_argument("--head_pruning_layer", type=int, default=0, help="layer to prune head")
-    parser.add_argument("--head_pruning_idx", type=int, default=0, help="head to prune")
-
-    parser.add_argument("--pruning_k", type=int, default=0, help="topk heads to perform head pruning")
-
     parser.add_argument("--cache_name", type=str, help="cached feature dir")
     parser.add_argument("--augment_layers", type=int, nargs="+", help="layers to augment blockskim module")
     parser.add_argument("--skim_threshold", type=float, default=0.5, help="threshold for skim predictor")
+
+    parser.add_argument("--head_pruning_layer", type=int, default=0, help="layer to prune head")
+    parser.add_argument("--head_pruning_idx", type=int, default=0, help="head to prune")
+    parser.add_argument("--pruning_k", type=int, default=0, help="topk heads to perform head pruning")
+
 
     args = parser.parse_args()
 
@@ -933,7 +932,10 @@ def main():
 
         # Load a trained model and vocabulary that you have fine-tuned
         if args.block_skim:
-            model = BertForQuestionAnsweringWithSkim.from_pretrained(args.output_dir,config=config)
+            if args.model_type =='bert':
+                model = BertForQuestionAnsweringWithSkim.from_pretrained(args.output_dir,config=config)
+            elif args.model_type == 'albert':
+                model = AlbertForQuestionAnsweringWithSkim.from_pretrained(args.output_dir,config=config)
         else:
             model = AutoModelForQuestionAnswering.from_pretrained(args.output_dir)  # , force_download=True)
 
@@ -964,7 +966,10 @@ def main():
             # Reload the model
             global_step = checkpoint.split("-")[-1] if len(checkpoints) > 1 else ""
             if args.block_skim:
-                model = BertForQuestionAnsweringWithSkim.from_pretrained(checkpoint,config=config)
+                if args.model_type =='bert':
+                    model = BertForQuestionAnsweringWithSkim.from_pretrained(checkpoint,config=config)
+                elif args.model_type == 'albert':
+                    model = AlbertForQuestionAnsweringWithSkim.from_pretrained(checkpoint,config=config)
             else:
                 model = AutoModelForQuestionAnswering.from_pretrained(checkpoint)  # , force_download=True)
             model.to(args.device)

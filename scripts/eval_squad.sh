@@ -1,6 +1,6 @@
-DATA_DIR=datasets/squad
+DATA_DIR=/home/yguan/blockskim/datasets/squad
 
-EVAL_CKPT_DIR=model/block_skim/skim_0.1_balance_20/
+EVAL_CKPT_DIR=model/head_pruning/squad/bert_base/k_6_skim_0.1_balance_20_09-04-15-31/
 
 
 # if [ -d "$OUTPUT_DIR" ]; then
