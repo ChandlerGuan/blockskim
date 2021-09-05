@@ -1,7 +1,7 @@
 OUTPUT_DIR=model/tmp/eval/prof
 DATA_DIR=datasets/squad
 
-EVAL_CKPT_DIR=model/block_skim/bert_large_wwm_new/skim_1_balance_20_seed_43/
+EVAL_CKPT_DIR=/home/yguan/blockskim2/model/head_pruning/squad/bert_base/k_6_skim_0.1_balance_20_09-04-18-38/
 # EVAL_CKPT_DIR=model/block_skim/skim_0.1_balance_20/
 
 mkdir -p ${OUTPUT_DIR}
@@ -15,7 +15,7 @@ python -u src/run_squad_profile.py \
   --skim_threshold 0.5 \
   --per_gpu_eval_batch_size=20 \
   --model_name_or_path ${EVAL_CKPT_DIR} \
-  --cache_name bert-large-uncased-whole-word-masking \
+  --cache_name bert-base-uncased \
   --do_lower_case \
   --do_eval \
   --predict_file dev-v1.1.json \
