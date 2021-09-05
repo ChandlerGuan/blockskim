@@ -75,7 +75,7 @@ class BlockSkim(nn.Module):
         assert x.shape[2]%self.block_size == 0
         block_num = seq_len//self.block_size
 
-        out = x.view(-1, self.num_attention_heads,  block_num, self.block_size, block_num, self.block_size).diagonal(dim1=2, dim2=4)
+        out = x.view(x.shape[0], self.num_attention_heads,  block_num, self.block_size, block_num, self.block_size).diagonal(dim1=2, dim2=4)
         out = out.permute(0,4,1,2,3).reshape(-1, self.num_attention_heads, self.block_size, self.block_size)
         # out -> shape [batch, diag block, head, from, to]
 
@@ -90,7 +90,7 @@ class BlockSkim(nn.Module):
         # out = self.conv3(out).squeeze(dim=1)
         out = torch.flatten(out,start_dim=1)
         # out = self.fc(out).view(-1, self.block_num, 1).squeeze(dim=-1)
-        out = self.fc(out).view(-1, block_num, 2)
+        out = self.fc(out).view(x.shape[0], block_num, 2)
         return out
 
 """

@@ -1,8 +1,8 @@
-DATA_DIR=datasets/squad
+DATA_DIR=/home/yguan/blockskim/datasets/squad
 
 
-BALANCE_FACTOR=20
-SKIM_FACTOR=1
+# BALANCE_FACTOR=20
+# SKIM_FACTOR=0.1
 
 # for BALANCE_FACTOR in 10 20  100
 # do

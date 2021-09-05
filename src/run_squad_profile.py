@@ -62,8 +62,8 @@ from modeling_bert_skim import BertForQuestionAnswering as BertForQuestionAnswer
 from modeling_albert_skim import AlbertForQuestionAnswering as AlbertForQuestionAnsweringWithSkim
 from modeling_blockskim import compute_skim_mask
 from squad.transformer_squad_processor import SquadV1Processor, SquadV2Processor
-from utils.calculate_prune_dict import calculate_prune_dict
 
+from torchprofile import profile_macs
 
 MODEL_CONFIG_CLASSES = list(MODEL_FOR_QUESTION_ANSWERING_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
@@ -85,8 +85,6 @@ def train(args, train_dataset, model, tokenizer):
     """Train the model"""
     if args.local_rank in [-1, 0]:
         tb_writer = SummaryWriter(args.output_dir)
-
-    model.prune_heads(calculate_prune_dict(k=args.pruning_k))
 
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
@@ -330,7 +328,6 @@ def train(args, train_dataset, model, tokenizer):
 def evaluate(args, model, tokenizer, prefix=""):
     dataset, examples, features = load_and_cache_examples(args, tokenizer, evaluate=True, output_examples=True)
 
-
     if not os.path.exists(args.output_dir) and args.local_rank in [-1, 0]:
         os.makedirs(args.output_dir)
 
@@ -356,16 +353,30 @@ def evaluate(args, model, tokenizer, prefix=""):
         all_skim_label = []
     start_time = timeit.default_timer()
 
+    total_flops = 0
+    total_samples = 0
+    total_time = 0
+
     for batch in tqdm(eval_dataloader, desc="Evaluating"):
         model.eval()
         batch = tuple(t.to(args.device) for t in batch)
 
         with torch.no_grad():
+            # if args.eval_batch_size == 1:
+            #     block_attention_mask = compute_skim_mask(batch[1], args.max_seq_length//args.block_size, args.block_size)
+            #     block_attention_mask = block_attention_mask.view(1,-1,1).repeat(1,1,args.block_size).view(1,-1).to(dtype=torch.bool)
+            #     batch = list(batch)
+            #     batch[0] = batch[0][block_attention_mask].view(1, -1)
+            #     batch[1] = batch[1][block_attention_mask].view(1, -1)
+            #     batch[2] = batch[2][block_attention_mask].view(1, -1)
+
             inputs = {
                 "input_ids": batch[0],
                 "attention_mask": batch[1],
                 "token_type_ids": batch[2],
             }
+
+
 
             if args.model_type in ["xlm", "roberta", "distilbert", "camembert", "bart", "longformer"]:
                 del inputs["token_type_ids"]
@@ -380,8 +391,15 @@ def evaluate(args, model, tokenizer, prefix=""):
                     inputs.update(
                         {"langs": (torch.ones(batch[0].shape, dtype=torch.int64) * args.lang_id).to(args.device)}
                     )
-            outputs = model(**inputs)
 
+            total_flops += profile_macs(model, args=(batch[0], batch[1], batch[2]))
+
+            import time
+            before_time = time.time()
+            outputs = model(**inputs)
+            total_time += time.time() - before_time
+
+            total_samples += batch[0].shape[0]
 
             if args.block_skim and args.actual_skim:
                 new_start_logits = torch.ones(batch[0].shape).to(args.device)*-100
@@ -400,6 +418,15 @@ def evaluate(args, model, tokenizer, prefix=""):
 
                 outputs.start_logits = new_start_logits
                 outputs.end_logits = new_end_logits
+            
+            if (args.eval_batch_size==1 or args.fast_eval!=0) and total_samples>=args.fast_eval :
+                output_dir = 'tmp/flops_eval/'
+                if not os.path.exists(output_dir):
+                    os.makedirs(output_dir)
+                with open(os.path.join(output_dir, f"first_{args.fast_eval}_{args.model_name_or_path.replace('/','_')}.txt"),'a') as output_file:
+                    output_file.write(f"{args}\n")
+                    output_file.write(f"{total_flops/total_samples/1e9}\t{total_time}\n\n")
+                exit()
 
 
         for i, feature_index in enumerate(feature_indices):
@@ -502,9 +529,13 @@ def evaluate(args, model, tokenizer, prefix=""):
     # Compute the F1 and exact scores.
     results = squad_evaluate(examples, predictions)
 
-    with open('tmp/head_pruning/single_head.txt', 'a') as output_file:
-        output_file.write(f"layer: {args.head_pruning_layer}, head: {args.head_pruning_idx}\n")
+    output_dir = 'tmp/flops_eval/'
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    with open(os.path.join(output_dir, f"{os.path.basename(os.path.normpath(args.model_name_or_path))}.txt"),'a') as output_file:
+        output_file.write(f"{args}\n")
         output_file.write(f"{results}\n")
+        output_file.write(f"{total_flops/total_samples/1e9}\t{total_time}\n\n")
 
     return results
 
@@ -773,15 +804,10 @@ def main():
     parser.add_argument("--block_size", type=int, default=32, help="block size for block skim module")
     parser.add_argument("--skim_factor", default=0.0001, type=float, help="factor for skim predictor")
     parser.add_argument("--balance_factor", default=1, type=float, help="factor for skim predictor")
-
-    parser.add_argument("--head_pruning_layer", type=int, default=0, help="layer to prune head")
-    parser.add_argument("--head_pruning_idx", type=int, default=0, help="head to prune")
-
-    parser.add_argument("--pruning_k", type=int, default=0, help="topk heads to perform head pruning")
-
     parser.add_argument("--cache_name", type=str, help="cached feature dir")
     parser.add_argument("--augment_layers", type=int, nargs="+", help="layers to augment blockskim module")
     parser.add_argument("--skim_threshold", type=float, default=0.5, help="threshold for skim predictor")
+    parser.add_argument("--fast_eval", type=int, default=0, help="epochs for fast flops evaluation")
 
     args = parser.parse_args()
 
