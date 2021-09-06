@@ -4,14 +4,16 @@ DATA_DIR=/home/yguan/blockskim/datasets/squad
 # BALANCE_FACTOR=20
 # SKIM_FACTOR=0.1
 
-for BALANCE_FACTOR in 1 20 100
+for SEED in 0 1 2 3 4
 do
-for SKIM_FACTOR in 10 1 0.1 0.01
+for BALANCE_FACTOR in  20 
+do
+for SKIM_FACTOR in 0.1 0.01 0.001
 do
 
 # OUTPUT_DIR=model/block_skim/bert_large_wwm/baseline
 # OUTPUT_DIR=model/block_skim/bert_large_wwm/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}_seed_43
-OUTPUT_DIR=model/block_skim/bert_base_new/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
+OUTPUT_DIR=model/block_skim/bert_base_new/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}_seed_${SEED}
 
 if [ -d "$OUTPUT_DIR" ]; then
   OUTPUT_DIR=${OUTPUT_DIR}_$(date +"%m-%d-%H-%M")
@@ -49,7 +51,7 @@ python src/run_squad.py \
   --skim_factor ${SKIM_FACTOR} \
   --balance_factor ${BALANCE_FACTOR} \
   --model_name_or_path bert-base-uncased \
-  --seed 43 \
+  --seed ${SEED} \
   --do_lower_case \
   --do_train \
   --do_eval \
@@ -66,5 +68,6 @@ python src/run_squad.py \
   --overwrite_output_dir \
   --output_dir ${OUTPUT_DIR} 2>&1 | tee ${OUTPUT_DIR}/log_finetune.log
 
+done
 done
 done
