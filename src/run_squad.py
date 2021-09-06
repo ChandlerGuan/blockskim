@@ -245,7 +245,6 @@ def train(args, train_dataset, model, tokenizer):
                     skim_label = compute_skim_mask(answer_mask, args.max_seq_length//args.block_size, args.block_size)
                     all_skim_loss = [torch.nn.functional.cross_entropy(skim_mask[0].view(-1,2), skim_label.view(-1), weight=balance_weight) for skim_mask in all_skim_mask]
                     skim_loss = sum(all_skim_loss)
-
                     loss = args.skim_factor * skim_loss + qa_loss
             else:
                 loss = outputs[0]

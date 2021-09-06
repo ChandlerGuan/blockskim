@@ -1,5 +1,5 @@
-DATA_DIR=/home/yguan/blockskim/datasets/squad
-
+# DATA_DIR=/home/yguan/blockskim/datasets/squad
+DATA_DIR=/home/yguan/blockskim/datasets/hotpotqa
 
 BALANCE_FACTOR=20
 SKIM_FACTOR=0.1
@@ -7,13 +7,13 @@ PRUNING_K=6
 
 # for BALANCE_FACTOR in 1 20 100
 # do
-# for SKIM_FACTOR in 10 1 0.1 0.01
+# for SKIM_FACTOR in 1 0.1 0.01
 # do
 
 # OUTPUT_DIR=model/block_skim/bert_large_wwm/baseline
 # OUTPUT_DIR=model/block_skim/bert_large_wwm/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}_seed_43
 # OUTPUT_DIR=model/block_skim/bert_base_new/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
-OUTPUT_DIR=model/head_pruning/squad/bert_base/k_${PRUNING_K}_skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
+OUTPUT_DIR=model/model/hotpotqa/head_pruning/bert_base/k_${PRUNING_K}_skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
 
 
 if [ -d "$OUTPUT_DIR" ]; then
@@ -57,8 +57,8 @@ python src/run_squad.py \
   --do_lower_case \
   --do_train \
   --do_eval \
-  --train_file train-v1.1.json \
-  --predict_file dev-v1.1.json \
+  --train_file gold_train.json \
+  --predict_file gold_validation.json \
   --data_dir ${DATA_DIR} \
   --per_gpu_train_batch_size 12 \
   --per_gpu_eval_batch_size=16 \
@@ -70,7 +70,6 @@ python src/run_squad.py \
   --overwrite_output_dir \
   --output_dir ${OUTPUT_DIR} 2>&1 | tee ${OUTPUT_DIR}/log_finetune.log
 
-done
 
-# done
-# done
+done
+done
