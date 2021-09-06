@@ -1,4 +1,5 @@
-DATA_DIR=/home/yguan/blockskim/datasets/squad
+# DATA_DIR=/home/yguan/blockskim/datasets/squad
+DATA_DIR=/home/yguan/blockskim/datasets/hotpotqa
 
 
 BALANCE_FACTOR=20
@@ -11,7 +12,7 @@ SKIM_FACTOR=0.1
 
 # OUTPUT_DIR=model/block_skim/bert_large_wwm/baseline
 # OUTPUT_DIR=model/block_skim/bert_large_wwm/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}_seed_43
-OUTPUT_DIR=model/block_skim/distilbert/distill/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
+OUTPUT_DIR=/home/yguan/blockskim/model/hotpotqa//distilbert/distill/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
 
 if [ -d "$OUTPUT_DIR" ]; then
   OUTPUT_DIR=${OUTPUT_DIR}_$(date +"%m-%d-%H-%M")
@@ -50,13 +51,13 @@ python src/run_squad.py \
   --balance_factor ${BALANCE_FACTOR} \
   --model_name_or_path distilbert-base-uncased \
   --teacher_type bert \
-  --teacher_name_or_path model/block_skim/bert_base_new/skim_0.1_balance_20/ \
+  --teacher_name_or_path /home/yguan/blockskim/model/hotpotqa/block_skim_new/skim_0.1_balance_20_seed_42_09-02-11-01/ \
   --seed 43 \
   --do_lower_case \
   --do_train \
   --do_eval \
-  --train_file train-v1.1.json \
-  --predict_file dev-v1.1.json \
+  --train_file gold_train.json \
+  --predict_file gold_validation.json \
   --data_dir ${DATA_DIR} \
   --per_gpu_train_batch_size 12 \
   --per_gpu_eval_batch_size=16 \
