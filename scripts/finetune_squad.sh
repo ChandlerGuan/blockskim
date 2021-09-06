@@ -1,18 +1,18 @@
 DATA_DIR=/home/yguan/blockskim/datasets/hotpotqa
 
 
-BALANCE_FACTOR=20
-SKIM_FACTOR=0.1
+# BALANCE_FACTOR=20
+# SKIM_FACTOR=0.1
 
 SEED=42
 
-# for BALANCE_FACTOR in 100 20
-# do
-# for SKIM_FACTOR in 10 1 0.1 0.01 0.001
-# do
+for BALANCE_FACTOR in 100 20
+do
+for SKIM_FACTOR in  1 0.1 0.01 
+do
 
 # OUTPUT_DIR=model/hotpotqa/baseline/
-OUTPUT_DIR=/home/yguan/blockskim/model/hotpotqa/block_skim_new/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}_seed_${SEED}
+OUTPUT_DIR=/home/yguan/blockskim/model/hotpotqa/bert_large/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}_seed_${SEED}
 
 if [ -d "$OUTPUT_DIR" ]; then
   OUTPUT_DIR=${OUTPUT_DIR}_$(date +"%m-%d-%H-%M")
@@ -51,7 +51,7 @@ python src/run_squad.py \
   --balance_factor ${BALANCE_FACTOR} \
   --seed ${SEED} \
   --evidence_factor 1 \
-  --model_name_or_path bert-base-uncased \
+  --model_name_or_path bert-large-uncased-whole-word-masking \
   --do_lower_case \
   --do_train \
   --do_eval \
