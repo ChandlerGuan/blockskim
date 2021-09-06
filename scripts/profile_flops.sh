@@ -1,5 +1,5 @@
 OUTPUT_DIR=model/tmp/eval/prof
-DATA_DIR=datasets/squad
+DATA_DIR=/home/yguan/blockskim/datasets/squad
 
 # EVAL_CKPT_DIR=model/block_skim/bert_large_wwm_new/skim_1_balance_20_seed_43/
 # EVAL_CKPT_DIR=model/block_skim/skim_0.1_balance_20/
