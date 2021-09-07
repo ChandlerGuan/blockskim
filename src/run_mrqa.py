@@ -149,16 +149,15 @@ def read_mrqa_examples(input_file, is_training):
             start_position = None
             end_position = None
             orig_answer_text = None
-            if is_training:
-                answers = qa["detected_answers"]
-                # import ipdb
-                # ipdb.set_trace()
-                spans = sorted([span for spans in answers for span in spans['char_spans']])
-                # take first span
-                char_start, char_end = spans[0][0], spans[0][1]
-                orig_answer_text = paragraph_text[char_start:char_end+1]
-                start_position, end_position = char_to_word_offset[char_start], char_to_word_offset[char_end]
-                num_answers += sum([len(spans['char_spans']) for spans in answers])
+            answers = qa["detected_answers"]
+            # import ipdb
+            # ipdb.set_trace()
+            spans = sorted([span for spans in answers for span in spans['char_spans']])
+            # take first span
+            char_start, char_end = spans[0][0], spans[0][1]
+            orig_answer_text = paragraph_text[char_start:char_end+1]
+            start_position, end_position = char_to_word_offset[char_start], char_to_word_offset[char_end]
+            num_answers += sum([len(spans['char_spans']) for spans in answers])
 
             example = MRQAExample(
                 qas_id=qas_id,
@@ -598,7 +597,7 @@ def evaluate(args, model, tokenizer, prefix=""):
     #         tokenizer,
     #     )
 
-    with gzip.GzipFile(args.predict_file, 'r') as reader:
+    with gzip.GzipFile(os.path.join(args.data_dir,args.predict_file), 'r') as reader:
         content = reader.read().decode('utf-8').strip().split('\n')[1:]
         eval_dataset = [json.loads(line) for line in content]
 
@@ -619,7 +618,7 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
 
     # Load data features from cache or dataset file
     input_file = args.predict_file if evaluate else args.train_file
-    cached_features_file = os.path.join(os.path.dirname(input_file), 'cached_{}_{}_{}'.format(
+    cached_features_file = os.path.join(args.data_dir,os.path.dirname(input_file), 'cached_{}_{}_{}'.format(
         'dev' if evaluate else 'train',
         list(filter(None, args.model_name_or_path.split('/'))).pop(),
         str(args.max_seq_length)))
@@ -629,13 +628,13 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
     else:
         logger.info("Creating features from dataset file at %s", input_file)
         examples = read_mrqa_examples(input_file=os.path.join(args.data_dir,input_file),
-                                                is_training=not evaluate)
+                                                is_training=True)
         features = convert_examples_to_features(examples=examples,
                                                 tokenizer=tokenizer,
                                                 max_seq_length=args.max_seq_length,
                                                 doc_stride=args.doc_stride,
                                                 max_query_length=args.max_query_length,
-                                                is_training=not evaluate,
+                                                is_training=True,
                                                 cls_token_segment_id=2 if args.model_type in ['xlnet'] else 0,
                                                 pad_token_segment_id=3 if args.model_type in ['xlnet'] else 0,
                                                 cls_token_at_end=True if args.model_type in ['xlnet'] else False,

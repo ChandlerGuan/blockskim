@@ -1,7 +1,7 @@
-TASK_NAME=SearchQA
+TASK_NAME=TriviaQA
 DATA_DIR=/home/yguan/blockskim/datasets/mrqa/${TASK_NAME}
 
-BALANCE_FACTOR=20
+BALANCE_FACTOR=100
 SKIM_FACTOR=0.1
 
 SEED=42
