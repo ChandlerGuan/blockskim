@@ -361,7 +361,7 @@ def evaluate(args, model, tokenizer, prefix=""):
             outputs = model(**inputs, output_attentions=True)
 
             for layer_idx in range(model.module.config.num_hidden_layers if isinstance(model, DataParallel) else model.config.num_hidden_layers):
-                junk_attn, ans_attn = cal_attn_distrib(outputs.attentions[layer_idx], batch[2], batch[-1])
+                junk_attn, ans_attn = cal_attn_distrib(outputs.attentions[layer_idx], batch[2], batch[-1], batch[5])
                 all_junk_attn[layer_idx].extend(junk_attn)
                 all_ans_attn[layer_idx].extend(ans_attn)
 

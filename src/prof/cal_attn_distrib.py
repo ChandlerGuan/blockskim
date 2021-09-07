@@ -1,13 +1,16 @@
 import torch
 import numpy as np
 
-def cal_attn_distrib(attn_mat, token_type_ids, ans_mask):
+def cal_attn_distrib(attn_mat, token_type_ids, ans_mask, p_mask):
     """
     attn_mat: [batch_size, num_head, from_seq_length, to_seq_length]
     """
     all_junk_attn, all_ans_attn = [], []
     for batch_idx in range(attn_mat.shape[0]):
-        context_mask = token_type_ids[batch_idx].to(dtype=torch.bool)
+        context_mask = token_type_ids[batch_idx]
+        context_mask[p_mask[batch_idx]==1] = 0
+        context_mask = context_mask.to(dtype=torch.bool)
+
 
         context_attn_mat = attn_mat[batch_idx][:,context_mask][:,:,context_mask]
         
