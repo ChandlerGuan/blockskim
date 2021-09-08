@@ -8,14 +8,14 @@ EVAL_CKPT_DIR=model/hotpotqa/albert_base/skim_0.1_balance_20/
 
 mkdir -p ${OUTPUT_DIR}
 
-# python -u src/run_squad_profile.py \
-#   --fast_eval 100 \
-python -u src/run_squad.py \
+# python -u src/run_squad.py \
+python -u src/run_squad_profile.py \
+  --fast_eval 100 \
   --model_type albert \
   --block_skim \
   --actual_skim \
-  --skim_threshold 0.005 \
-  --per_gpu_eval_batch_size=20 \
+  --skim_threshold 0.01 \
+  --per_gpu_eval_batch_size=1 \
   --model_name_or_path ${EVAL_CKPT_DIR} \
   --cache_name albert-base-v2 \
   --do_eval \
