@@ -1,8 +1,8 @@
 OUTPUT_DIR=model/tmp/eval/debug
-TASK_NAME=TriviaQA
+TASK_NAME=SearchQA
 DATA_DIR=/home/yguan/blockskim/datasets/mrqa/${TASK_NAME}
 
-EVAL_CKPT_DIR=model/TriviaQA/block_skim/bert_base/skim_0.1_balance_20_09-06-22-51/
+EVAL_CKPT_DIR=model/SearchQA/block_skim/bert_base/skim_0.1_balance_20_09-06-22-42/
 
 
 # if [ -d "$OUTPUT_DIR" ]; then
