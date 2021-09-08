@@ -12,7 +12,7 @@ SKIM_FACTOR=0.1
 
 # OUTPUT_DIR=model/block_skim/bert_large_wwm/baseline
 # OUTPUT_DIR=model/block_skim/bert_large_wwm/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}_seed_43
-OUTPUT_DIR=/home/yguan/blockskim/model/hotpotqa//distilbert/distill/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
+OUTPUT_DIR=/home/yguan/blockskim/model/hotpotqa//distilbert/distill/baseline
 
 if [ -d "$OUTPUT_DIR" ]; then
   OUTPUT_DIR=${OUTPUT_DIR}_$(date +"%m-%d-%H-%M")
@@ -46,7 +46,6 @@ mkdir -p ${OUTPUT_DIR}
 
 python src/run_squad.py \
   --model_type distilbert \
-  --block_skim \
   --skim_factor ${SKIM_FACTOR} \
   --balance_factor ${BALANCE_FACTOR} \
   --model_name_or_path distilbert-base-uncased \
