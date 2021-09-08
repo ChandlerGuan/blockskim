@@ -1,4 +1,4 @@
-TASK_NAME=SearchQA
+TASK_NAME=NaturalQuestions
 DATA_DIR=/home/yguan/blockskim/datasets/mrqa/${TASK_NAME}
 
 BALANCE_FACTOR=20
@@ -12,7 +12,8 @@ SKIM_FACTOR=0.1
 # OUTPUT_DIR=model/block_skim/bert_large_wwm/baseline
 # OUTPUT_DIR=model/block_skim/bert_large_wwm/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}_seed_43
 # OUTPUT_DIR=model/block_skim/bert_base_new/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
-OUTPUT_DIR=model/${TASK_NAME}/block_skim/bert_base/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
+# OUTPUT_DIR=model/${TASK_NAME}/block_skim/bert_base/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
+OUTPUT_DIR=model/${TASK_NAME}/baseline
 
 
 if [ -d "$OUTPUT_DIR" ]; then
@@ -47,7 +48,6 @@ mkdir -p ${OUTPUT_DIR}
 
 python src/run_squad.py \
   --model_type bert \
-  --block_skim \
   --skim_factor ${SKIM_FACTOR} \
   --balance_factor ${BALANCE_FACTOR} \
   --model_name_or_path bert-base-uncased \
