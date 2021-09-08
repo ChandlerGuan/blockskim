@@ -13,7 +13,8 @@ PRUNING_K=6
 # OUTPUT_DIR=model/block_skim/bert_large_wwm/baseline
 # OUTPUT_DIR=model/block_skim/bert_large_wwm/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}_seed_43
 # OUTPUT_DIR=model/block_skim/bert_base_new/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
-OUTPUT_DIR=model/model/hotpotqa/head_pruning/bert_base/k_${PRUNING_K}_skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
+# OUTPUT_DIR=model/model/hotpotqa/head_pruning/bert_base/k_${PRUNING_K}_skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}
+OUTPUT_DIR=model/model/hotpotqa/head_pruning/bert_base/k_${PRUNING_K}_baseline
 
 
 if [ -d "$OUTPUT_DIR" ]; then
@@ -48,7 +49,6 @@ mkdir -p ${OUTPUT_DIR}
 
 python src/run_squad.py \
   --model_type bert \
-  --block_skim \
   --skim_factor ${SKIM_FACTOR} \
   --balance_factor ${BALANCE_FACTOR} \
   --pruning_k ${PRUNING_K} \
