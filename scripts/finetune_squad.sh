@@ -1,19 +1,20 @@
-DATA_DIR=/home/yguan/blockskim/datasets/squad
+# DATA_DIR=/home/yguan/blockskim/datasets/squad
+DATA_DIR=/home/yguan/blockskim/datasets/hotpotqa
 
 
-# BALANCE_FACTOR=20
-# SKIM_FACTOR=0.1
+BALANCE_FACTOR=20
+SKIM_FACTOR=0.1
 
-for SEED in 0 1 2 3 4
-do
-for BALANCE_FACTOR in  20 
-do
-for SKIM_FACTOR in 0.1 0.01 0.001
-do
+# for SEED in 0 1 2 3 4
+# do
+# for BALANCE_FACTOR in  20 
+# do
+# for SKIM_FACTOR in 0.1 0.01 0.001
+# do
 
 # OUTPUT_DIR=model/block_skim/bert_large_wwm/baseline
 # OUTPUT_DIR=model/block_skim/bert_large_wwm/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}_seed_43
-OUTPUT_DIR=model/block_skim/bert_base_new/skim_${SKIM_FACTOR}_balance_${BALANCE_FACTOR}_seed_${SEED}
+OUTPUT_DIR=model/hotpotqa/bert_large_wwm/baseline
 
 if [ -d "$OUTPUT_DIR" ]; then
   OUTPUT_DIR=${OUTPUT_DIR}_$(date +"%m-%d-%H-%M")
@@ -47,16 +48,15 @@ mkdir -p ${OUTPUT_DIR}
 
 python src/run_squad.py \
   --model_type bert \
-  --block_skim \
   --skim_factor ${SKIM_FACTOR} \
   --balance_factor ${BALANCE_FACTOR} \
-  --model_name_or_path bert-base-uncased \
-  --seed ${SEED} \
+  --model_name_or_path bert-large-uncased-whole-word-masking \
+  --seed 42 \
   --do_lower_case \
   --do_train \
   --do_eval \
-  --train_file train-v1.1.json \
-  --predict_file dev-v1.1.json \
+  --train_file gold-train.json \
+  --predict_file gold-validation.json \
   --data_dir ${DATA_DIR} \
   --per_gpu_train_batch_size 12 \
   --per_gpu_eval_batch_size=16 \
@@ -68,6 +68,6 @@ python src/run_squad.py \
   --overwrite_output_dir \
   --output_dir ${OUTPUT_DIR} 2>&1 | tee ${OUTPUT_DIR}/log_finetune.log
 
-done
-done
-done
+# done
+# done
+# done
