@@ -7,7 +7,7 @@ def plot_curve():
     plt.rc('font', family='serif')
     plt.style.use('ggplot')
 
-    fig, ax = plt.subplots(figsize=(6,4))
+    fig, ax = plt.subplots(figsize=(6,2))
 
     x = np.array(list(range(1,13)))
 
