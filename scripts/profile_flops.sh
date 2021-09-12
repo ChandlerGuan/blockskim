@@ -14,7 +14,7 @@ mkdir -p ${OUTPUT_DIR}
 # python -u src/run_squad.py \
 python -u src/run_squad_profile.py \
   --fast_eval 100 \
-  --model_type bert \
+  --model_type distilbert \
   --block_skim \
   --actual_skim \
   --skim_threshold 0.01 \

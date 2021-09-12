@@ -64,8 +64,6 @@ from modeling_distilbert_skim import DistilBertForQuestionAnswering as DistilBer
 from modeling_blockskim import compute_skim_mask
 from squad.transformer_squad_processor import SquadV1Processor, SquadV2Processor
 
-from torchprofile import profile_macs
-
 MODEL_CONFIG_CLASSES = list(MODEL_FOR_QUESTION_ANSWERING_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
 
@@ -82,7 +80,7 @@ def to_list(tensor):
     return tensor.detach().cpu().tolist()
 
 
-def train(args, train_dataset, model, tokenizer):
+def train(args, train_dataset, model, tokenizer, teacher=None):
     """Train the model"""
     if args.local_rank in [-1, 0]:
         tb_writer = SummaryWriter(args.output_dir)
@@ -191,6 +189,8 @@ def train(args, train_dataset, model, tokenizer):
                 continue
 
             model.train()
+            if teacher is not None:
+                teacher.eval()
             batch = tuple(t.to(args.device) for t in batch)
 
             inputs = {
@@ -248,6 +248,39 @@ def train(args, train_dataset, model, tokenizer):
                     loss = args.skim_factor * skim_loss + qa_loss
             else:
                 loss = outputs[0]
+
+            # Distillation loss
+            if teacher is not None:
+                if "token_type_ids" not in inputs:
+                    inputs["token_type_ids"] = None if args.teacher_type == "xlm" else batch[2]
+                with torch.no_grad():
+                    teacher_outputs = teacher(
+                        input_ids=inputs["input_ids"],
+                        token_type_ids=inputs["token_type_ids"],
+                        attention_mask=inputs["attention_mask"],
+                    )
+                start_logits_tea, end_logits_tea = teacher_outputs.start_logits, teacher_outputs.end_logits
+                assert start_logits_tea.size() == outputs[1].size()
+                assert end_logits_tea.size() == outputs[2].size()
+
+                loss_fct = torch.nn.KLDivLoss(reduction="batchmean")
+                loss_start = (
+                    loss_fct(
+                        torch.nn.functional.log_softmax(outputs[1] / args.temperature, dim=-1),
+                        torch.nn.functional.softmax(start_logits_tea / args.temperature, dim=-1),
+                    )
+                    * (args.temperature ** 2)
+                )
+                loss_end = (
+                    loss_fct(
+                        torch.nn.functional.log_softmax(outputs[2] / args.temperature, dim=-1),
+                        torch.nn.functional.softmax(end_logits_tea / args.temperature, dim=-1),
+                    )
+                    * (args.temperature ** 2)
+                )
+                loss_ce = (loss_start + loss_end) / 2.0
+
+                loss = args.alpha_ce * loss_ce + args.alpha_squad * loss
 
             if args.n_gpu > 1:
                 loss = loss.mean()  # mean() to average on multi-gpu parallel (not distributed) training
@@ -354,30 +387,16 @@ def evaluate(args, model, tokenizer, prefix=""):
         all_skim_label = []
     start_time = timeit.default_timer()
 
-    total_flops = 0
-    total_samples = 0
-    total_time = 0
-
     for batch in tqdm(eval_dataloader, desc="Evaluating"):
         model.eval()
         batch = tuple(t.to(args.device) for t in batch)
 
         with torch.no_grad():
-            # if args.eval_batch_size == 1:
-            #     block_attention_mask = compute_skim_mask(batch[1], args.max_seq_length//args.block_size, args.block_size)
-            #     block_attention_mask = block_attention_mask.view(1,-1,1).repeat(1,1,args.block_size).view(1,-1).to(dtype=torch.bool)
-            #     batch = list(batch)
-            #     batch[0] = batch[0][block_attention_mask].view(1, -1)
-            #     batch[1] = batch[1][block_attention_mask].view(1, -1)
-            #     batch[2] = batch[2][block_attention_mask].view(1, -1)
-
             inputs = {
                 "input_ids": batch[0],
                 "attention_mask": batch[1],
                 "token_type_ids": batch[2],
             }
-
-
 
             if args.model_type in ["xlm", "roberta", "distilbert", "camembert", "bart", "longformer"]:
                 del inputs["token_type_ids"]
@@ -392,15 +411,8 @@ def evaluate(args, model, tokenizer, prefix=""):
                     inputs.update(
                         {"langs": (torch.ones(batch[0].shape, dtype=torch.int64) * args.lang_id).to(args.device)}
                     )
-
-            total_flops += profile_macs(model, args=(batch[0], batch[1], batch[2]))
-
-            import time
-            before_time = time.time()
             outputs = model(**inputs)
-            total_time += time.time() - before_time
 
-            total_samples += batch[0].shape[0]
 
             if args.block_skim and args.actual_skim:
                 new_start_logits = torch.ones(batch[0].shape).to(args.device)*-100
@@ -419,15 +431,6 @@ def evaluate(args, model, tokenizer, prefix=""):
 
                 outputs.start_logits = new_start_logits
                 outputs.end_logits = new_end_logits
-            
-            if (args.eval_batch_size==1 or args.fast_eval!=0) and total_samples>=args.fast_eval :
-                output_dir = 'tmp/flops_eval/'
-                if not os.path.exists(output_dir):
-                    os.makedirs(output_dir)
-                with open(os.path.join(output_dir, f"first_{args.fast_eval}_{args.model_name_or_path.replace('/','_')}.txt"),'a') as output_file:
-                    output_file.write(f"{args}\n")
-                    output_file.write(f"{total_flops/total_samples/1e9}\t{total_time}\n\n")
-                exit()
 
 
         for i, feature_index in enumerate(feature_indices):
@@ -529,15 +532,6 @@ def evaluate(args, model, tokenizer, prefix=""):
 
     # Compute the F1 and exact scores.
     results = squad_evaluate(examples, predictions)
-
-    output_dir = 'tmp/flops_eval/'
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    with open(os.path.join(output_dir, f"{os.path.basename(os.path.normpath(args.model_name_or_path))}.txt"),'a') as output_file:
-        output_file.write(f"{args}\n")
-        output_file.write(f"{results}\n")
-        output_file.write(f"{total_flops/total_samples/1e9}\t{total_time}\n\n")
-
     return results
 
 
@@ -807,8 +801,31 @@ def main():
     parser.add_argument("--balance_factor", default=1, type=float, help="factor for skim predictor")
     parser.add_argument("--cache_name", type=str, help="cached feature dir")
     parser.add_argument("--augment_layers", type=int, nargs="+", help="layers to augment blockskim module")
-    parser.add_argument("--skim_threshold", type=float, default=0.5, help="threshold for skim predictor")
-    parser.add_argument("--fast_eval", type=int, default=0, help="epochs for fast flops evaluation")
+    parser.add_argument("--skim_threshold", type=float, default=0.001, help="threshold for skim predictor")
+
+
+    # Distillation parameters (optional)
+    parser.add_argument(
+        "--teacher_type",
+        default=None,
+        type=str,
+        help="Teacher type. Teacher tokenizer and student (model) tokenizer must output the same tokenization. Only for distillation.",
+    )
+    parser.add_argument(
+        "--teacher_name_or_path",
+        default=None,
+        type=str,
+        help="Path to the already SQuAD fine-tuned teacher model. Only for distillation.",
+    )
+    parser.add_argument(
+        "--alpha_ce", default=0.5, type=float, help="Distillation loss linear weight. Only for distillation."
+    )
+    parser.add_argument(
+        "--alpha_squad", default=0.5, type=float, help="True SQuAD loss linear weight. Only for distillation."
+    )
+    parser.add_argument(
+        "--temperature", default=2.0, type=float, help="Distillation temperature. Only for distillation."
+    )
 
     args = parser.parse_args()
 
@@ -926,6 +943,22 @@ def main():
             config=config,
             cache_dir=args.cache_dir if args.cache_dir else None,
         )
+
+    if args.teacher_type is not None:
+        assert args.teacher_name_or_path is not None
+        assert args.alpha_ce > 0.0
+        assert args.alpha_ce + args.alpha_squad > 0.0
+        assert args.teacher_type != "distilbert", "We constraint teachers not to be of type DistilBERT."
+        teacher_config = AutoConfig.from_pretrained(
+            args.teacher_name_or_path, cache_dir=args.cache_dir if args.cache_dir else None
+        )
+        teacher = AutoModelForQuestionAnswering.from_pretrained(
+            args.teacher_name_or_path, config=teacher_config, cache_dir=args.cache_dir if args.cache_dir else None
+        )
+        teacher.to(args.device)
+    else:
+        teacher = None
+
     if args.local_rank == 0:
         # Make sure only the first process in distributed training will download model & vocab
         torch.distributed.barrier()
@@ -948,7 +981,7 @@ def main():
     # Training
     if args.do_train:
         train_dataset = load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=False)
-        global_step, tr_loss = train(args, train_dataset, model, tokenizer)
+        global_step, tr_loss = train(args, train_dataset, model, tokenizer, teacher=teacher)
         logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
 
     # Save the trained model and the tokenizer
@@ -968,10 +1001,13 @@ def main():
         if args.block_skim:
             if args.model_type =='bert':
                 model = BertForQuestionAnsweringWithSkim.from_pretrained(args.output_dir,config=config)
+            elif args.model_type == 'albert':
+                model = AlbertForQuestionAnsweringWithSkim.from_pretrained(args.output_dir,config=config)
             elif args.model_type == 'distilbert':
                 model = DistilBertForQuestionAnsweringWithSkim.from_pretrained(args.output_dir,config=config)
         else:
             model = AutoModelForQuestionAnswering.from_pretrained(args.output_dir)  # , force_download=True)
+
         # SquadDataset is not compatible with Fast tokenizers which have a smarter overflow handeling
         # So we use use_fast=False here for now until Fast-tokenizer-compatible-examples are out
         tokenizer = AutoTokenizer.from_pretrained(args.output_dir, do_lower_case=args.do_lower_case, use_fast=False)
@@ -1001,10 +1037,12 @@ def main():
             if args.block_skim:
                 if args.model_type =='bert':
                     model = BertForQuestionAnsweringWithSkim.from_pretrained(checkpoint,config=config)
+                elif args.model_type == 'albert':
+                    model = AlbertForQuestionAnsweringWithSkim.from_pretrained(checkpoint,config=config)
                 elif args.model_type == 'distilbert':
                     model = DistilBertForQuestionAnsweringWithSkim.from_pretrained(checkpoint,config=config)
-                else:
-                    model = AutoModelForQuestionAnswering.from_pretrained(checkpoint)  # , force_download=True)
+            else:
+                model = AutoModelForQuestionAnswering.from_pretrained(checkpoint)  # , force_download=True)
             model.to(args.device)
 
             # Evaluate
