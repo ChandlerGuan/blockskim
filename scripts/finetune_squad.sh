@@ -2,8 +2,8 @@
 DATA_DIR=/home/yguan/blockskim/datasets/hotpotqa
 
 
-# BALANCE_FACTOR=20
-# SKIM_FACTOR=0.1
+BALANCE_FACTOR=20
+SKIM_FACTOR=0.1
 
 # for BALANCE_FACTOR in 1  20 100
 # do
