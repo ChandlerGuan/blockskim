@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from typing import List
 
 class BlockSkim(nn.Module):
     def __init__(self, config):
@@ -11,6 +12,8 @@ class BlockSkim(nn.Module):
 
         self.block_size = config.block_size
         self.num_attention_heads = config.num_attention_heads
+
+        self.pruned_heads = set()
 
         self.conv1 = torch.nn.Conv2d(config.num_attention_heads,config.num_attention_heads,
                                         kernel_size=self.kernel_size,
@@ -34,6 +37,39 @@ class BlockSkim(nn.Module):
                                         )
         self.relu3 = nn.ReLU(inplace=True)
         self.fc = torch.nn.Linear(self.num_attention_heads*self.block_size*self.block_size//16,2)
+
+    def prune_heads(self, heads: List):
+        if len(heads) == 0:
+            return
+        if self.pruned_heads:
+            return
+
+        mask = torch.ones(self.num_attention_heads)
+        for head in heads:
+            mask[head] = 0
+        mask = torch.arange(self.num_attention_heads,device=self.conv1.weight.device,)[mask==1]
+
+        self.prev_num_attention_heads = self.num_attention_heads
+        self.num_attention_heads = self.num_attention_heads - len(heads)
+        self.pruned_heads = self.pruned_heads.union(heads)
+        
+        new_conv1 = torch.nn.Conv2d(self.num_attention_heads,self.prev_num_attention_heads,
+                                kernel_size=self.kernel_size,
+                                stride=self.stride,
+                                padding=self.kernel_size//2,
+                                device=self.conv1.weight.device,
+                                )
+        new_weight = self.conv1.weight.index_select(dim=1, index=mask).clone().detach()
+        new_bias = self.conv1.bias.clone().detach()
+
+        new_conv1.weight.requires_grad = False
+        new_conv1.weight.copy_(new_weight.contiguous())
+        new_conv1.weight.requires_grad = True
+        new_conv1.bias.requires_grad = False
+        new_conv1.bias.copy_(new_bias.contiguous())
+        new_conv1.bias.requires_grad = True
+
+        self.conv1 = new_conv1
 
     def forward(self, x):
         """
@@ -87,5 +123,27 @@ def test_BlockSkim():
 
     print(block_skim_module(x).shape)
 
+def test_prune_head():
+
+    class DummyConfig():
+        max_seq_length = 512
+        num_attention_heads = 12
+        block_size = 32
+
+    config = DummyConfig()
+
+    block_skim_module = BlockSkim(config)
+
+    x = torch.rand((8, config.num_attention_heads, config.max_seq_length, config.max_seq_length))
+    print(block_skim_module(x).shape)
+
+    block_skim_module.prune_heads([0,2,5]) 
+
+    new_x = torch.rand((8, config.num_attention_heads-3, config.max_seq_length, config.max_seq_length))
+    print(block_skim_module(new_x).shape)
+
+
+
 if __name__ == "__main__":
-    test_BlockSkim()
+    # test_BlockSkim()
+    test_prune_head()

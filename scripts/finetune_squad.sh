@@ -7,6 +7,7 @@ python src/run_squad.py \
   --model_type bert \
   --skim_factor ${SKIM_FACTOR} \
   --balance_factor ${BALANCE_FACTOR} \
+  --pruning_k ${PRUNING_K} \
   --model_name_or_path bert-base-uncased \
   --seed 42 \
   --do_lower_case \

@@ -2,7 +2,7 @@ DATA_DIR=datasets/squad
 
 EVAL_CKPT_DIR={YOUR_CKPT}
 
-python -u src/run_squad.py \
+CUDA_LAUNCH_BLOCKING=1 python src/run_squad.py \
   --model_type bert \
   --model_name_or_path ${EVAL_CKPT_DIR} \
   --do_lower_case \
