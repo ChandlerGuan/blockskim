@@ -22,7 +22,9 @@ We will make the code base public available and release the checkpoints of model
 
 2. Install dependencies with Anaconda. 
 
-``` conda create --name blockskim --file requirements.txt ```
+``` 
+conda create --name blockskim --file requirements.txt 
+```
 
 3. Activate installed anaconda virtual environment.
 
