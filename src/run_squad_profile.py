@@ -968,8 +968,13 @@ def main():
         if args.block_skim:
             if args.model_type =='bert':
                 model = BertForQuestionAnsweringWithSkim.from_pretrained(args.output_dir,config=config)
+<<<<<<< HEAD
             elif args.model_type == 'distilbert':
                 model = DistilBertForQuestionAnsweringWithSkim.from_pretrained(args.output_dir,config=config)
+=======
+            elif args.model_type == 'albert':
+                model = AlbertForQuestionAnsweringWithSkim.from_pretrained(args.output_dir,config=config)
+>>>>>>> origin/exp_albert
         else:
             model = AutoModelForQuestionAnswering.from_pretrained(args.output_dir)  # , force_download=True)
         # SquadDataset is not compatible with Fast tokenizers which have a smarter overflow handeling
@@ -1003,8 +1008,12 @@ def main():
                     model = BertForQuestionAnsweringWithSkim.from_pretrained(checkpoint,config=config)
                 elif args.model_type == 'distilbert':
                     model = DistilBertForQuestionAnsweringWithSkim.from_pretrained(checkpoint,config=config)
+                elif args.model_type == 'albert':
+                    model = AlbertForQuestionAnsweringWithSkim.from_pretrained(checkpoint,config=config)
                 else:
                     model = AutoModelForQuestionAnswering.from_pretrained(checkpoint)  # , force_download=True)
+            else:
+                model = AutoModelForQuestionAnswering.from_pretrained(checkpoint)  # , force_download=True)
             model.to(args.device)
 
             # Evaluate

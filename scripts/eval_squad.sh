@@ -11,6 +11,7 @@ python -u src/run_squad.py \
   --actual_skim \
   --predict_file dev-v1.1.json \
   --data_dir ${DATA_DIR} \
+  --per_gpu_eval_batch_size=64 \
   --max_seq_length 512 \
   --doc_stride 128 \
   --overwrite_output_dir \

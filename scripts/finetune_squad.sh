@@ -1,5 +1,4 @@
-# DATA_DIR=/home/yguan/blockskim/datasets/squad
-DATA_DIR=/home/yguan/blockskim/datasets/hotpotqa
+DATA_DIR=/home/yguan/blockskim/datasets/squad
 
 BALANCE_FACTOR=20
 SKIM_FACTOR=0.1
