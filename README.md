@@ -6,7 +6,7 @@ Transformer models have achieved promising results on nat-ural  language  proces
 ## Overview
 ### Overall scheme of Block-Skim
 ![](fig/schematic.png)
-### 5 times speedup with no accuracy loss on SQuAD
+### 3 times speedup with no accuracy loss on SQuAD
 ![](fig/results.png)
 ### Compatible acceleration with model compression methods
 SQuAD-1.1            |  HotpotQA
