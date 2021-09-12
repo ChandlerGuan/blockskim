@@ -765,7 +765,7 @@ def main():
     parser.add_argument("--balance_factor", default=1, type=float, help="factor for skim predictor")
     parser.add_argument("--cache_name", type=str, help="cached feature dir")
     parser.add_argument("--augment_layers", type=int, nargs="+", help="layers to augment blockskim module")
-    parser.add_argument("--skim_threshold", type=float, default=0.5, help="threshold for skim predictor")
+    parser.add_argument("--skim_threshold", type=float, default=0.001, help="threshold for skim predictor")
 
     args = parser.parse_args()
 

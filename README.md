@@ -42,4 +42,24 @@ We use SearchQA, NewsQA, NaturalQuestions and TriviaQA datasets in MRQA format. 
 
 3. HotpotQA
    
-Download HotpotQA dataset from 
+We use HotpotQA dataset from [datasets](https://huggingface.co/datasets/hotpot_qa) and parsing it with in-house preprocess supporting facts in SQuAD format.
+
+` python src/utils/process_hotpotqa.py`
+
+### Training
+
+For Block-Skim training, just run 
+```
+bash scripts/finetune_squad.sh
+```
+
+### Evaluation
+
+For Block-Skim inference, just run
+```
+bash scripts/eval_squad.sh
+```
+
+### Open Source
+
+We will make the code base public available and release the checkpoints of models for Block-Skim once accepted.

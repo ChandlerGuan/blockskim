@@ -74,7 +74,7 @@ def convert_hotpot_to_squad_format(
         context=example["context"]['sentences']
 
     for i in range(len(context)):
-        context[i]="".join(context[i]) # 每个句子的开头本来就带着空格
+        context[i]="".join(context[i]) 
     context=" ".join(context)
     context = add_yes_no(context)
 
@@ -111,15 +111,11 @@ if __name__ == "__main__":
     save_path = "./validation.json"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
-
-    train_dataset=converted_datasets['train']
-    # using datasets to_json API causes un-loadable json file, parse the json file as dict manually instead
-    # train_dataset_json = train_dataset.to_json('datasets/hotpotqa/gold_train.json', lines=False, orient='table')    
+    train_dataset=converted_datasets['train']  
     train_dataset_dict = train_dataset.to_dict()
     train_dataset_dict = [{'title': title,'paragraphs': paragraphs} for title, paragraphs in zip(train_dataset_dict['title'],train_dataset_dict['paragraphs'])]
     train_dataset_dict = {'data':train_dataset_dict}
     with open('datasets/hotpotqa/gold_train.json','w') as output_file:
         json.dump(train_dataset_dict, output_file)
-
     validation_dataset=converted_datasets['validation']
     validation_dataset_json = validation_dataset.to_json('datasets/hotpotqa/gold_validation.json',lines=False,orient='table')
