@@ -26,7 +26,9 @@ We will make the code base public available and release the checkpoints of model
 
 3. Activate installed anaconda virtual environment.
 
-` conda activate blockskim `
+```
+conda activate blockskim
+```
 
 ### Datasets
 
@@ -45,7 +47,9 @@ We use SearchQA, NewsQA, NaturalQuestions and TriviaQA datasets in MRQA format. 
    
 We use HotpotQA dataset from [datasets](https://huggingface.co/datasets/hotpot_qa) and parsing it with in-house preprocess script to include supporting facts in SQuAD format.
 
-` python src/utils/process_hotpotqa.py`
+``` 
+python src/utils/process_hotpotqa.py
+```
 
 ### Training
 
