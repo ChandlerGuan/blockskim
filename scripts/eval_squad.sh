@@ -1,7 +1,7 @@
-OUTPUT_DIR=model/tmp/eval/debug
-DATA_DIR=datasets/squad
+OUTPUT_DIR=/home/yguan/blockskim/model/tmp/eval/debug
+DATA_DIR=/home/yguan/blockskim/datasets/hotpotqa
 
-EVAL_CKPT_DIR=model/block_skim/skim_0.1_balance_20/
+EVAL_CKPT_DIR=/home/yguan/blockskim/model/hotpotqa/block_skim_new/skim_0.1_balance_20_seed_42_09-02-11-01
 
 
 # if [ -d "$OUTPUT_DIR" ]; then
@@ -40,10 +40,10 @@ python -u src/run_squad.py \
   --per_gpu_eval_batch_size=1 \
   --fast_eval 100 \
   --model_name_or_path ${EVAL_CKPT_DIR} \
-  --cache_name bert-base-uncased \
   --do_lower_case \
   --do_eval \
-  --predict_file dev-v1.1.json \
+  --block_skim \
+  --predict_file gold_validation.json \
   --data_dir ${DATA_DIR} \
   --max_seq_length 512 \
   --doc_stride 128 \

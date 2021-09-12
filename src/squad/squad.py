@@ -153,6 +153,18 @@ def squad_convert_example_to_features(
             all_doc_tokens, tok_start_position, tok_end_position, tokenizer, example.answer_text
         )
 
+        # evid_start_position, evid_end_position = [], []
+        # for i in example
+    if hasattr(example, 'supporting_fact_position'):
+        evid_positions = []
+        for start_position, end_position in example.supporting_fact_position:
+            evid_start_position = orig_to_tok_index[start_position]
+            if end_position < len(example.doc_tokens) - 1:
+                evid_end_position = orig_to_tok_index[end_position + 1] - 1
+            else:
+                evid_end_position = len(all_doc_tokens) - 1
+            evid_positions.append((evid_start_position, evid_end_position))
+
     spans = []
 
     truncated_query = tokenizer.encode(
@@ -295,6 +307,10 @@ def squad_convert_example_to_features(
         # chandler
         # answer_mask: mask for answer position
         answer_mask = np.zeros_like(span["token_type_ids"])
+
+        for evid_start_pos, evid_end_pos in evid_positions:
+            answer_mask[evid_start_pos:evid_end_pos+1] = 2
+
         answer_mask[start_position:end_position+1] = 1
 
         features.append(
