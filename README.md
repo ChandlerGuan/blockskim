@@ -15,6 +15,7 @@ SQuAD-1.1            |  HotpotQA
 
 ## How to use
 
+We will make the code base public available and release the checkpoints of models for Block-Skim once accepted.
 ### Requirements
 
 1. Install [Anaconda](https://www.anaconda.com/products/individual-d). 
@@ -42,7 +43,7 @@ We use SearchQA, NewsQA, NaturalQuestions and TriviaQA datasets in MRQA format. 
 
 3. HotpotQA
    
-We use HotpotQA dataset from [datasets](https://huggingface.co/datasets/hotpot_qa) and parsing it with in-house preprocess supporting facts in SQuAD format.
+We use HotpotQA dataset from [datasets](https://huggingface.co/datasets/hotpot_qa) and parsing it with in-house preprocess script to include supporting facts in SQuAD format.
 
 ` python src/utils/process_hotpotqa.py`
 
@@ -52,6 +53,7 @@ For Block-Skim training, just run
 ```
 bash scripts/finetune_squad.sh
 ```
+This bash script will run the training loop in `src/run_squad.py`. The other training settings, e.g. distillation or pruning, are implemented in separated training loop files in `src`.
 
 ### Evaluation
 
@@ -60,6 +62,3 @@ For Block-Skim inference, just run
 bash scripts/eval_squad.sh
 ```
 
-### Open Source
-
-We will make the code base public available and release the checkpoints of models for Block-Skim once accepted.
