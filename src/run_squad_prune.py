@@ -86,7 +86,7 @@ def train(args, train_dataset, model, tokenizer):
     if args.local_rank in [-1, 0]:
         tb_writer = SummaryWriter(args.output_dir)
 
-    model.prune_heads(calculate_prune_dict(file_name='/home/yguan/blockskim/tmp/head_pruning/prune_single_head.csv',k=args.pruning_k))
+    model.prune_heads(calculate_prune_dict(file_name='tmp/head_pruning/head_importance.csv',k=args.pruning_k))
 
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
