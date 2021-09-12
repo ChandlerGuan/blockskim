@@ -90,7 +90,7 @@ def plot_grouped():
         layer_ans = [layer_ans[i] for i in range(layer_ans.shape[0])]
 
 
-        fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 3))
+        fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 2))
         # ax1 = plt.subplot(121)
         # ax2 = plt.subplot(122, sharey=ax1)
 
